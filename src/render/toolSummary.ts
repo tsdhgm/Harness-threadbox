@@ -1,3 +1,4 @@
+import * as os from 'node:os';
 import * as path from 'node:path';
 import type { ToolCall } from '../core/types.js';
 import type { ToolSummary } from '../core/provider.js';
@@ -27,11 +28,11 @@ function obj(v: unknown): Record<string, unknown> {
 }
 
 export function relPath(p: string, cwd: string): string {
-  if (!cwd || !p.startsWith('/')) return p;
+  if (!cwd || !path.isAbsolute(p)) return p;
   const rel = path.relative(cwd, p);
   if (rel && !rel.startsWith('..')) return rel;
-  const home = process.env['HOME'];
-  if (home && p.startsWith(home + '/')) return `~${p.slice(home.length)}`;
+  const home = process.env['HOME'] || os.homedir();
+  if (home && p.startsWith(home + path.sep)) return `~${p.slice(home.length)}`;
   return p;
 }
 

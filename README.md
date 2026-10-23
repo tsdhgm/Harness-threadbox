@@ -46,7 +46,7 @@ files Claude Code writes locally. It never launches or talks to Claude.
 
 ## Install
 
-Requires Node.js 24+ (Linux; macOS should work too).
+Requires Node.js 24+ (Linux; macOS should work too; Windows see below).
 
 ```bash
 git clone https://github.com/tsdhgm/Harness-threadbox.git
@@ -57,6 +57,64 @@ npm link            # puts `hthreadbox` on your PATH
 ```
 
 Or run without linking: `node dist/cli.js`.
+
+### Windows: WSL (recommended)
+
+Install inside a WSL distribution (Ubuntu etc.) with Node.js 24+, using the
+same commands as above. If Claude Code itself runs in WSL, its logs are in the
+WSL home directory (`~/.claude`) and everything works as on Linux.
+
+If Claude Code runs on the Windows side, its logs live under the Windows
+profile. Point `hthreadbox` at them through the `/mnt/c` mount:
+
+```bash
+hthreadbox --claude-dir /mnt/c/Users/<you>/.claude
+```
+
+Two limitations apply when reading logs across the WSL boundary:
+
+- `/mnt/c` does not deliver file-change events, so live sessions update only
+  through the 2-second polling of files already marked live. New sessions and
+  projects appear after `r` (rescan) rather than automatically.
+- Process ids in the Windows live registry are not visible from WSL, so live
+  detection falls back to "modified within the last 60 s" (`◌` in the list).
+
+Terminal: Windows Terminal is recommended. Enable mouse support in tmux with
+`set -g mouse on` if you run it inside tmux.
+
+### Windows: PowerShell or cmd.exe (experimental)
+
+`hthreadbox` is developed and tested on Linux. Native Windows is untested by
+the author but nothing in it is Linux-specific: it uses `node:tty` raw mode,
+`fs.watch` and standard VT escape sequences, all of which work in
+**Windows Terminal** on Windows 10/11 (the legacy console host is not
+supported). Node.js 24+ and Git for Windows are required.
+
+PowerShell:
+
+```powershell
+git clone https://github.com/tsdhgm/Harness-threadbox.git
+cd Harness-threadbox
+npm install
+npm run build
+npm link            # creates hthreadbox.cmd / hthreadbox.ps1 in %APPDATA%\npm
+hthreadbox
+```
+
+cmd.exe uses the same commands. If PowerShell refuses to run `hthreadbox.ps1`
+("running scripts is disabled"), either allow local scripts once with
+`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`, or call `hthreadbox.cmd`
+with the extension.
+
+Notes for native Windows:
+
+- Logs are read from `%USERPROFILE%\.claude` (or `%CLAUDE_CONFIG_DIR%`).
+  Project directory names follow Claude Code's encoding, e.g.
+  `C--Users-you-src-myrepo`. `--project C:\Users\you\src\myrepo` works.
+- `npm run smoke:tui` needs bash and tmux, so it is WSL/Linux only. The unit
+  tests (`npm test`) and `npm run smoke` run anywhere.
+- If `⏺` / `⎿` render as two cells or as boxes, use `--ascii` or set
+  `HTHREADBOX_ASCII=1`.
 
 ## Usage
 

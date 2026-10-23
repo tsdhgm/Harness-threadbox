@@ -208,7 +208,7 @@ export class ClaudeProvider implements Provider {
       const live = index.filter((e) => e.live);
       return live.sort((a, b) => (b.updatedAt ?? b.mtimeMs) - (a.updatedAt ?? a.mtimeMs))[0];
     }
-    if (arg.endsWith('.jsonl') || arg.includes('/')) {
+    if (arg.endsWith('.jsonl') || arg.includes('/') || arg.includes('\\') || path.isAbsolute(arg)) {
       const p = path.resolve(arg);
       try {
         await fs.promises.access(p);
