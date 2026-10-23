@@ -49,8 +49,8 @@ files Claude Code writes locally. It never launches or talks to Claude.
 Requires Node.js 24+ (Linux; macOS should work too).
 
 ```bash
-git clone https://github.com/tosihide/harness-threadbox.git
-cd harness-threadbox
+git clone https://github.com/tsdhgm/Harness-threadbox.git
+cd Harness-threadbox
 npm install
 npm run build
 npm link            # puts `hthreadbox` on your PATH

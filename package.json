@@ -4,6 +4,14 @@
   "description": "Console (TUI) viewer for AI coding-harness session logs. Live tail and history browsing. Claude Code first; Codex/Gemini/Grok via providers.",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tsdhgm/Harness-threadbox.git"
+  },
+  "homepage": "https://github.com/tsdhgm/Harness-threadbox#readme",
+  "bugs": {
+    "url": "https://github.com/tsdhgm/Harness-threadbox/issues"
+  },
   "bin": {
     "hthreadbox": "dist/cli.js"
   },
