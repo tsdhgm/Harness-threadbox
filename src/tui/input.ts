@@ -158,6 +158,7 @@ export function keyNameToBytes(name: string): string {
     Enter: '\r',
     Tab: '\t',
     BackTab: '\x1b[Z',
+    'Shift-Tab': '\x1b[Z',
     Esc: '\x1b',
     Escape: '\x1b',
     Up: '\x1b[A',

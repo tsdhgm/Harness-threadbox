@@ -2,7 +2,7 @@
 
 A Linux console (TUI) viewer for AI coding-harness session logs. It shows the
 session you are running **right now** as it streams, and lets you browse every
-past session, project by project, in one continuous transcript.
+past session, project by project, as one continuous transcript per project.
 
 The first supported harness is **Claude Code** (it reads the JSONL transcripts
 under `~/.claude/projects/`). Codex / Gemini / Grok are planned as additional
@@ -16,14 +16,17 @@ files Claude Code writes locally. It never launches or talks to Claude.
 
 ## Features
 
-- **Two panes.** Left: sessions grouped by project, newest at the bottom, with
-  a live marker (`●` busy, `○` idle). Right: the transcript rendered the way
+- **Three panes.** Left: projects (repositories), most recently active at the
+  bottom, with a live marker (`●` busy, `○` idle) and session count. Middle:
+  the sessions of the selected project. Right: the transcript rendered the way
   Claude Code itself prints it — `> prompt`, `⏺ text`, `⏺ Bash(cmd)` with
   `⎿ result` previews, `✻ Thinking…`, diff coloring for edits.
-- **Continuous scrolling.** The right pane is one virtual document over all
-  sessions: scroll past the end of a session and the next one begins; the left
-  selection follows what you are looking at. Click or press Enter on the left
-  to jump.
+- **Continuous scrolling within a project.** The right pane is one virtual
+  document over the selected project's sessions: scroll past the end of a
+  session and the next one begins, but you never leave the project. The middle
+  selection follows what you are looking at. Moving in the projects pane
+  switches the other two panes; click or press Enter in the sessions pane to
+  jump to a session.
 - **Live tail.** Running sessions are detected from `~/.claude/sessions/`.
   While you are at the bottom of a live session, new turns append and the view
   sticks to the end (`FOLLOW` in the status bar). Pending tool calls show
@@ -31,12 +34,12 @@ files Claude Code writes locally. It never launches or talks to Claude.
 - **Tool summaries** per tool: command, file path, `Added N lines, removed M`
   with a colored diff, `Read N lines`, agent description, web query, MCP tool
   names.
-- **Search and filters.** `/` searches across sessions (loading them on demand),
-  `n`/`N` steps through matches. Toggle thinking text, cycle tool-output
+- **Search and filters.** `/` searches across the project's sessions (loading
+  them on demand), `n`/`N` steps through matches. Toggle thinking text, cycle tool-output
   verbosity (collapsed / full / hidden), hide tool-only turns, show hidden
   meta records.
 - **Markdown export** of any session (`e` in the TUI, or `hthreadbox export`).
-- **Resizable split** (`[`, `]`, `\`, or drag the divider with the mouse).
+- **Resizable panes** (`[`, `]`, `\`, or drag a divider with the mouse).
 - **Non-interactive modes** for piping and scripting: `cat`, `cat -f`, `list
   --json`, `export`.
 - Handles the real log format: assistant messages split one block per record
@@ -138,27 +141,28 @@ Global options: `--claude-dir DIR` (default `$CLAUDE_CONFIG_DIR` or
 
 ### Keys
 
-| Key | Right pane (transcript) | Left pane (list) |
-|---|---|---|
-| `j`/`↓`, `k`/`↑` | scroll one line | move selection |
-| `PgDn`/`Space`/`Ctrl-f`, `PgUp`/`Ctrl-b` | page | page |
-| `d` / `u` | half page | |
-| `g` / `G` | top / bottom (`G` turns follow on) | first / last session |
-| `Tab` | focus left | focus right |
-| `Enter` / click | | open the selected session |
-| `L` | jump to the next live session | |
-| `/`, `n`, `N` | search, next, previous | |
-| `t` | toggle thinking text | |
-| `o` | tool output: collapsed → full → hidden | |
-| `h` | hide tool-only assistant turns | |
-| `m` | show hidden meta records | |
-| `[` `]` `\` | split −2 / +2 / reset | |
-| `e` | export to Markdown | export selected |
-| `r` | rescan sessions | |
-| `?` / `q` | help / quit | |
+| Key | Transcript (right) | Sessions (middle) | Projects (left) |
+|---|---|---|---|
+| `j`/`↓`, `k`/`↑` | scroll one line | move selection | switch project |
+| `PgDn`/`Space`/`Ctrl-f`, `PgUp`/`Ctrl-b` | page | page | page |
+| `d` / `u` | half page | | |
+| `g` / `G` | top / bottom of the project (`G` turns follow on) | first / last session | first / last project |
+| `Tab` / `Shift-Tab` | cycle focus: projects → sessions → transcript | | |
+| `Enter` / click | | show the selected session | go to its session list |
+| `L` | jump to the next live session (any project) | | |
+| `/`, `n`, `N` | search within the project, next, previous | | |
+| `t` | toggle thinking text | | |
+| `o` | tool output: collapsed → full → hidden | | |
+| `h` | hide tool-only assistant turns | | |
+| `m` | show hidden meta records | | |
+| `[` `]` `\` | divider right of the focused pane −2 / +2 / reset both | | |
+| `e` | export to Markdown | export selected | |
+| `r` | rescan sessions | | |
+| `?` / `q` | help / quit | | |
 
-Mouse: wheel scrolls the pane under the pointer, click selects, dragging the
-divider resizes. Inside tmux you need `set -g mouse on`.
+Mouse: wheel scrolls the pane under the pointer, click selects, dragging a
+divider resizes. Below 80 columns only the focused pane is shown (`Tab` cycles).
+Inside tmux you need `set -g mouse on`.
 
 ## How it finds sessions
 

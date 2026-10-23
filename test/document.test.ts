@@ -32,6 +32,26 @@ describe('Document', () => {
     expect(first.kind).toBe('header');
   });
 
+  it('scopes the document to one project and clamps scrolling at its edges', async () => {
+    const { doc, store } = await setup();
+    doc.setScope('claude:projA');
+    doc.refreshOrder();
+    expect(doc.order.map((e) => refKey(e.ref))).toEqual(['claude:s1', 'claude:s2']);
+    await store.load(doc.order[0]!);
+    await store.load(doc.order[1]!);
+    // scrolling down from s1 crosses into s2 but stops at the end of s2 (never reaches s3)
+    let top = { key: 'claude:s1', line: 0 };
+    for (let i = 0; i < 50; i++) top = doc.scrollBy(top, 10, 5);
+    expect(['claude:s1', 'claude:s2']).toContain(top.key);
+    expect(doc.bottomKey(top, 5)).toBe('claude:s2');
+    expect(doc.showsEndOf(top, 5, 'claude:s2')).toBe(true);
+    // scrolling up from s1 stays at its first line
+    expect(doc.scrollBy({ key: 'claude:s1', line: 0 }, -100, 5)).toEqual({ key: 'claude:s1', line: 0 });
+    doc.setScope('claude:projB');
+    doc.refreshOrder();
+    expect(doc.order.map((e) => refKey(e.ref))).toEqual(['claude:s3']);
+  });
+
   it('scrolls continuously across session boundaries in both directions', async () => {
     const { doc, store } = await setup();
     for (const e of doc.order) await store.load(e);

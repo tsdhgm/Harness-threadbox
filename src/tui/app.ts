@@ -2,7 +2,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { type ParsedArgs, flagBool, flagNum, flagStr, useColor } from '../cli/args.js';
 import { createContext } from '../cli/context.js';
-import { type SessionStore, type StoreEvent, refKey } from '../core/sessionStore.js';
+import { type SessionStore, type StoreEvent, groupKeyOf, refKey } from '../core/sessionStore.js';
+import type { SessionIndexEntry } from '../core/types.js';
 import { sessionLabel } from '../core/types.js';
 import { sanitizeFilename, sessionToMarkdown } from '../render/markdownExport.js';
 import type { ToolsMode } from '../render/transcript.js';
@@ -10,32 +11,43 @@ import { displayWidth, truncateToWidth } from '../render/width.js';
 import { type BaseRenderOptions, Document, type Top } from './document.js';
 import { highlightAnsi } from './highlight.js';
 import { type InputEvent, InputParser, type KeyEvent, type MouseEvent, keyNameToBytes } from './input.js';
-import { type Layout, clampLeftWidth, computeLayout, defaultLeftWidth } from './layout.js';
+import { type Focus, type Layout, type PaneWidths, type Rect, clampWidths, computeLayout, defaultWidths, nextFocus } from './layout.js';
 import { Screen, fitAnsi } from './screen.js';
 import { FakeTerminal, RealTerminal, type TerminalIO } from './terminal.js';
 import { HELP_LINES } from './widgets/help.js';
 import { LineInput } from './widgets/lineInput.js';
+import { ProjectList } from './widgets/projectList.js';
 import { SessionList } from './widgets/sessionList.js';
 
 type Mode = 'normal' | 'search' | 'export' | 'help';
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+const newestFirst = (a: SessionIndexEntry, b: SessionIndexEntry): number => (b.updatedAt ?? b.mtimeMs) - (a.updatedAt ?? a.mtimeMs);
 
+/**
+ * Three panes: projects │ sessions of the selected project │ transcript.
+ * The transcript is a continuous document over the selected project's sessions only;
+ * scrolling past its first/last session stops at the project boundary.
+ */
 export class App {
   private screen: Screen;
   private input: InputParser;
   private doc: Document;
+  private projects = new ProjectList();
   private list = new SessionList();
-  private focus: 'left' | 'right' = 'right';
+  private focus: Focus = 'right';
+  /** ProjectGroup.key of the project shown in the middle/right panes */
+  private projectKey: string | undefined;
   private top: Top | undefined;
   private follow = true;
   private pendingBottom: string | undefined;
-  private leftWidth: number;
+  private widths: PaneWidths;
   private mode: Mode = 'normal';
   private lineInput: LineInput | undefined;
   private query = '';
   private message: { text: string; until: number } | undefined;
-  private dragging = false;
+  /** divider being dragged: 1 = projects|sessions, 2 = sessions|right */
+  private dragging: 0 | 1 | 2 = 0;
   private renderScheduled = false;
   private layout: Layout;
   private quitResolve: ((code: number) => void) | undefined;
@@ -50,11 +62,12 @@ export class App {
     base: Omit<BaseRenderOptions, 'width'>,
   ) {
     this.color = base.color;
-    this.leftWidth = defaultLeftWidth(io.cols);
-    this.layout = computeLayout(io.cols, io.rows, this.leftWidth, this.focus);
+    this.widths = defaultWidths(io.cols);
+    this.layout = computeLayout(io.cols, io.rows, this.widths, this.focus);
     this.screen = new Screen(io, io.cols, io.rows);
     this.doc = new Document(store, { ...base, width: this.layout.right.w });
     this.list.ascii = base.ascii;
+    this.projects.ascii = base.ascii;
     this.input = new InputParser((ev) => this.onInput(ev));
     this.doc.onLoaded = (key) => this.onLoaded(key);
     this.doc.onError = (msg) => this.toast(msg);
@@ -68,8 +81,7 @@ export class App {
     this.io.onResize(() => this.onResize());
     this.store.events.on((ev) => this.onStore(ev));
     this.store.startWatching();
-    this.doc.refreshOrder();
-    this.list.setGroups(this.store.groups());
+    this.refreshLists();
     this.initialPosition();
     this.scheduleRender();
     return new Promise<number>((resolve) => {
@@ -83,20 +95,70 @@ export class App {
     this.quitResolve?.(code);
   }
 
+  private rightH(): number {
+    return this.layout.right.h;
+  }
+
+  /** Rebuild both lists from the store and re-scope the document to the current project. */
+  private refreshLists(): void {
+    const groups = this.store.groups();
+    this.projects.setGroups(groups);
+    if (this.projectKey && !groups.some((g) => g.key === this.projectKey)) this.projectKey = undefined;
+    const g = groups.find((x) => x.key === this.projectKey);
+    this.list.setSessions(g?.sessions ?? []);
+    this.projects.select(this.projectKey);
+    this.doc.setScope(this.projectKey);
+    this.doc.refreshOrder();
+  }
+
+  /** Pick the project of the newest live session (else the most recent session) and land at its end. */
   private initialPosition(): void {
+    const all = this.store.order();
+    if (all.length === 0) {
+      this.top = undefined;
+      this.projectKey = undefined;
+      this.refreshLists();
+      return;
+    }
+    const live = all.filter((e) => e.live).sort(newestFirst);
+    const target = live[0] ?? all[all.length - 1]!;
+    this.selectProject(groupKeyOf(target), refKey(target.ref));
+  }
+
+  /**
+   * Show project `gk` in the middle and right panes and land at the end of `key`
+   * (default: the project's newest live session, else its last session).
+   */
+  private selectProject(gk: string, key?: string): void {
+    this.projectKey = gk;
+    this.refreshLists();
     const order = this.doc.order;
     if (order.length === 0) {
       this.top = undefined;
       return;
     }
-    const live = order.filter((e) => e.live).sort((a, b) => (b.updatedAt ?? b.mtimeMs) - (a.updatedAt ?? a.mtimeMs));
-    const target = live[0] ?? order[order.length - 1]!;
-    const key = refKey(target.ref);
-    this.top = this.doc.topOf(key);
-    this.pendingBottom = key;
+    let target = key && this.doc.indexOf(key) >= 0 ? key : undefined;
+    if (!target) {
+      const live = order.filter((e) => e.live).sort(newestFirst);
+      target = refKey((live[0] ?? order[order.length - 1]!).ref);
+    }
+    this.landAtEnd(target);
+  }
+
+  /** Put the last line of session `key` on the last row and follow it. */
+  private landAtEnd(key: string): void {
+    const i = this.doc.indexOf(key);
+    if (i < 0) return;
+    if (this.doc.isLoaded(key)) {
+      this.top = this.doc.clampToEnd(i, this.rightH());
+      this.pendingBottom = undefined;
+    } else {
+      this.top = this.doc.topOf(key);
+      this.pendingBottom = key;
+    }
     this.follow = true;
-    this.list.select(key);
-    this.doc.preload(this.doc.indexOf(key));
+    this.doc.preload(i);
+    this.syncLists();
   }
 
   // ---------- events ----------
@@ -113,17 +175,19 @@ export class App {
   private onStore(ev: StoreEvent): void {
     switch (ev.kind) {
       case 'index': {
-        this.doc.refreshOrder();
-        this.list.setGroups(this.store.groups());
-        if (this.top && this.doc.indexOf(this.top.key) < 0) this.initialPosition();
-        if (!this.top) this.initialPosition();
+        this.refreshLists();
+        if (!this.top || this.doc.indexOf(this.top.key) < 0) {
+          if (this.projectKey && this.doc.order.length > 0) this.selectProject(this.projectKey);
+          else this.initialPosition();
+        }
         break;
       }
       case 'session': {
         if (!this.top) break;
-        const h = this.layout.right.h;
+        const h = this.rightH();
         const before = this.top.key === ev.key ? this.doc.locate(this.top) : undefined;
         this.doc.cache(ev.key); // re-render dirty turns now
+        if (this.doc.indexOf(ev.key) < 0) break; // another project
         if (this.follow && (this.doc.bottomKey(this.top, h) === ev.key || this.top.key === ev.key)) {
           this.top = this.doc.clampToEnd(this.doc.indexOf(ev.key), h);
         } else if (this.top.key === ev.key) {
@@ -145,11 +209,11 @@ export class App {
 
   private onLoaded(key: string): void {
     if (!this.top) return;
-    const h = this.layout.right.h;
+    const h = this.rightH();
     if (this.pendingBottom === key) {
       this.pendingBottom = undefined;
-      this.top = this.doc.clampToEnd(this.doc.indexOf(key), h);
-      this.syncLeft();
+      if (this.doc.indexOf(key) >= 0) this.top = this.doc.clampToEnd(this.doc.indexOf(key), h);
+      this.syncLists();
     } else if (this.top.key === key) {
       this.top = this.doc.clamp(this.top, h);
     }
@@ -168,6 +232,14 @@ export class App {
     if (ev.type === 'mouse') this.onMouse(ev);
     else this.onKey(ev);
     this.scheduleRender();
+  }
+
+  /** The pane that keys act on (the focused one, if it is visible). */
+  private activePane(): Focus {
+    const lay = this.layout;
+    if (this.focus === 'projects' && lay.projects) return 'projects';
+    if (this.focus === 'sessions' && lay.sessions) return 'sessions';
+    return 'right';
   }
 
   private onKey(ev: KeyEvent): void {
@@ -192,8 +264,14 @@ export class App {
       }
       return;
     }
-    const h = this.layout.right.h;
-    const left = this.focus === 'left' && this.layout.left !== undefined;
+    const h = this.rightH();
+    const pane = this.activePane();
+    const page = h - 1;
+    const vertical = (delta: number): void => {
+      if (pane === 'projects') this.moveProject(delta);
+      else if (pane === 'sessions') this.list.move(delta);
+      else this.scroll(delta);
+    };
     if (ev.ctrl && ev.name === 'c') return this.quit(0);
     switch (ev.name) {
       case 'q':
@@ -205,48 +283,47 @@ export class App {
         this.query = '';
         return;
       case 'tab':
+        this.focus = nextFocus(this.focus, 1);
+        return;
       case 'backtab':
-        this.focus = this.focus === 'left' ? 'right' : 'left';
+        this.focus = nextFocus(this.focus, -1);
         return;
       case 'j':
       case 'down':
-        return left ? this.moveSel(1) : this.scroll(1);
+        return vertical(1);
       case 'k':
       case 'up':
-        return left ? this.moveSel(-1) : this.scroll(-1);
+        return vertical(-1);
       case 'pagedown':
       case 'space':
-        return left ? this.moveSel(h - 1) : this.scroll(h - 1);
+        return vertical(page);
       case 'pageup':
-        return left ? this.moveSel(-(h - 1)) : this.scroll(-(h - 1));
+        return vertical(-page);
       case 'f':
-        if (ev.ctrl) return left ? this.moveSel(h - 1) : this.scroll(h - 1);
+        if (ev.ctrl) return vertical(page);
         return;
       case 'b':
-        if (ev.ctrl) return left ? this.moveSel(-(h - 1)) : this.scroll(-(h - 1));
+        if (ev.ctrl) return vertical(-page);
         return;
       case 'd':
-        return left ? undefined : this.scroll(Math.floor(h / 2));
+        return pane === 'right' ? this.scroll(Math.floor(h / 2)) : undefined;
       case 'u':
-        return left ? undefined : this.scroll(-Math.floor(h / 2));
+        return pane === 'right' ? this.scroll(-Math.floor(h / 2)) : undefined;
       case 'g':
-        if (left) {
-          this.list.first();
-          return;
-        }
+      case 'home':
+        if (pane === 'projects') return this.switchProject(this.projects.first());
+        if (pane === 'sessions') return void this.list.first();
         return this.jumpTo(this.doc.keyAt(0), false);
       case 'G':
-        if (left) {
-          this.list.last();
-          return;
-        }
-        return this.gotoEnd();
-      case 'home':
-        return left ? void this.list.first() : this.jumpTo(this.doc.keyAt(0), false);
       case 'end':
-        return left ? void this.list.last() : this.gotoEnd();
+        if (pane === 'projects') return this.switchProject(this.projects.last());
+        if (pane === 'sessions') return void this.list.last();
+        return this.gotoEnd();
       case 'enter':
-        if (left && this.list.selectedKey) this.jumpTo(this.list.selectedKey, false);
+        if (pane === 'projects') {
+          this.switchProject(this.projects.selectedKey);
+          this.focus = 'sessions';
+        } else if (pane === 'sessions' && this.list.selectedKey) this.jumpTo(this.list.selectedKey, false);
         return;
       case 'L':
         return this.nextLive();
@@ -272,16 +349,14 @@ export class App {
       case 'm':
         return this.setBase({ showMeta: !this.doc.getBase().showMeta });
       case '[':
-        this.leftWidth = clampLeftWidth(this.io.cols, this.leftWidth - 2);
-        return;
+        return this.resizeFocused(-2);
       case ']':
-        this.leftWidth = clampLeftWidth(this.io.cols, this.leftWidth + 2);
-        return;
+        return this.resizeFocused(2);
       case '\\':
-        this.leftWidth = defaultLeftWidth(this.io.cols);
+        this.widths = defaultWidths(this.io.cols);
         return;
       case 'e': {
-        const key = left ? this.list.selectedKey : this.currentKey();
+        const key = pane === 'sessions' ? this.list.selectedKey : this.currentKey();
         const e = key ? this.doc.entry(key) : undefined;
         if (!e) return;
         this.mode = 'export';
@@ -296,61 +371,89 @@ export class App {
     }
   }
 
+  /** `[` / `]` move the divider to the right of the focused pane (projects → div1, otherwise div2). */
+  private resizeFocused(delta: number): void {
+    const w = { ...this.widths };
+    if (this.focus === 'projects') w.projects += delta;
+    else w.sessions += delta;
+    this.widths = clampWidths(this.io.cols, w);
+  }
+
   private onMouse(ev: MouseEvent): void {
     const lay = this.layout;
-    const inLeft = lay.left !== undefined && ev.x < lay.left.x + lay.left.w && ev.y < lay.left.h && !(lay.single && this.focus === 'right');
-    const onDivider = lay.divider !== undefined && ev.x === lay.divider;
+    const inRect = (r: Rect | undefined): boolean => r !== undefined && ev.x >= r.x && ev.x < r.x + r.w && ev.y < r.h;
+    const inProjects = inRect(lay.projects);
+    const inSessions = inRect(lay.sessions);
+    const showRight = !lay.single || this.focus === 'right';
+    const onDiv: 0 | 1 | 2 = lay.div1 === ev.x ? 1 : lay.div2 === ev.x ? 2 : 0;
     if (ev.action === 'wheel-up' || ev.action === 'wheel-down') {
       const d = ev.action === 'wheel-up' ? -3 : 3;
-      if (inLeft) this.list.scrollBy(d, lay.left!.h);
-      else this.scroll(d);
+      if (inProjects) this.projects.scrollBy(d, lay.projects!.h);
+      else if (inSessions) this.list.scrollBy(d, lay.sessions!.h);
+      else if (showRight) this.scroll(d);
       return;
     }
     if (ev.action === 'press' && ev.button === 0) {
-      if (onDivider) {
-        this.dragging = true;
+      if (onDiv) {
+        this.dragging = onDiv;
         return;
       }
-      if (inLeft) {
-        this.focus = 'left';
+      if (inProjects) {
+        this.focus = 'projects';
+        const g = this.projects.rowAt(ev.y);
+        if (g) this.switchProject(g.key);
+        return;
+      }
+      if (inSessions) {
+        this.focus = 'sessions';
         const row = this.list.rowAt(ev.y);
-        if (row?.kind === 'session') {
+        if (row) {
           this.list.select(row.key);
           this.jumpTo(row.key, false);
         }
         return;
       }
-      this.focus = 'right';
+      if (showRight) this.focus = 'right';
       return;
     }
     if (ev.action === 'drag' && this.dragging) {
-      this.leftWidth = clampLeftWidth(this.io.cols, ev.x);
+      const w = { ...this.widths };
+      if (this.dragging === 1) w.projects = ev.x;
+      else w.sessions = ev.x - this.widths.projects - 1;
+      this.widths = clampWidths(this.io.cols, w);
       return;
     }
-    if (ev.action === 'release') this.dragging = false;
+    if (ev.action === 'release') this.dragging = 0;
   }
 
   // ---------- navigation ----------
 
   private scroll(delta: number): void {
     if (!this.top) return;
-    const h = this.layout.right.h;
+    const h = this.rightH();
     this.top = this.doc.scrollBy(this.top, delta, h);
     if (delta < 0) this.follow = false;
     else this.updateFollowAtEnd();
-    this.syncLeft();
+    this.syncLists();
   }
 
   private updateFollowAtEnd(): void {
     if (!this.top) return;
-    const h = this.layout.right.h;
+    const h = this.rightH();
     const bottom = this.doc.bottomKey(this.top, h);
     const e = this.doc.entry(bottom);
     if (e?.live && this.doc.showsEndOf(this.top, h, bottom)) this.follow = true;
   }
 
-  private moveSel(delta: number): void {
-    this.list.move(delta);
+  /** Move the project selection and switch the other panes to it. */
+  private moveProject(delta: number): void {
+    this.switchProject(this.projects.move(delta));
+  }
+
+  private switchProject(gk: string | undefined): void {
+    if (!gk) return;
+    this.projects.select(gk);
+    if (gk !== this.projectKey) this.selectProject(gk);
   }
 
   private jumpTo(key: string | undefined, follow: boolean): void {
@@ -367,67 +470,53 @@ export class App {
   private gotoEnd(): void {
     const n = this.doc.order.length;
     if (n === 0) return;
-    const i = n - 1;
-    const key = this.doc.keyAt(i)!;
-    if (!this.doc.isLoaded(key)) {
-      this.top = this.doc.topOf(key);
-      this.pendingBottom = key;
-      this.doc.preload(i);
-    } else {
-      this.top = this.doc.clampToEnd(i, this.layout.right.h);
-      this.doc.preload(i);
-    }
-    this.follow = true;
-    this.syncLeft();
+    this.landAtEnd(this.doc.keyAt(n - 1)!);
   }
 
+  /** Next live session in global order, switching project if needed. */
   private nextLive(): void {
-    const order = this.doc.order;
-    const live = order.map((e, i) => ({ e, i })).filter((x) => x.e.live);
+    const all = this.store.order();
+    const live = all.map((e, i) => ({ e, i })).filter((x) => x.e.live);
     if (live.length === 0) return this.toast('no live sessions');
-    const cur = this.top ? this.doc.indexOf(this.top.key) : -1;
+    const ck = this.currentKey();
+    const cur = ck ? all.findIndex((e) => refKey(e.ref) === ck) : -1;
     const next = live.find((x) => x.i > cur) ?? live[0]!;
+    const gk = groupKeyOf(next.e);
     const key = refKey(next.e.ref);
-    if (this.doc.isLoaded(key)) {
-      this.top = this.doc.clampToEnd(next.i, this.layout.right.h);
-      this.doc.preload(next.i);
-    } else {
-      this.top = this.doc.topOf(key);
-      this.pendingBottom = key;
-      this.doc.preload(next.i);
-    }
-    this.follow = true;
-    this.syncLeft();
+    if (gk !== this.projectKey) this.selectProject(gk, key);
+    else this.landAtEnd(key);
   }
 
   /** The session the user is "on": the bottom one while following, else the top one. */
   private currentKey(): string | undefined {
     if (!this.top) return undefined;
-    if (this.follow) return this.doc.bottomKey(this.top, this.layout.right.h);
+    if (this.follow) return this.doc.bottomKey(this.top, this.rightH());
     return this.top.key;
   }
 
-  private syncLeft(): void {
+  /** Reflect the transcript position in the two lists. */
+  private syncLists(): void {
     const k = this.currentKey();
     if (k) this.list.select(k);
+    this.projects.select(this.projectKey);
   }
 
   private setBase(patch: Partial<BaseRenderOptions>): void {
     const b = { ...this.doc.getBase(), ...patch };
     this.doc.setBase(b);
-    if (this.top) this.top = this.doc.clamp(this.top, this.layout.right.h);
+    if (this.top) this.top = this.doc.clamp(this.top, this.rightH());
     const parts = [`thinking:${b.thinking ? 'on' : 'off'}`, `tools:${b.tools}`, `tool-only:${b.hideToolOnly ? 'hidden' : 'shown'}`, `meta:${b.showMeta ? 'on' : 'off'}`];
     this.toast(parts.join(' '), 1500);
   }
 
-  // ---------- search ----------
+  // ---------- search (within the current project) ----------
 
   private async search(dir: 1 | -1, fromCurrent: boolean): Promise<void> {
     if (!this.top || !this.query) return;
     const gen = ++this.searchGen;
     const q = this.query.toLowerCase();
     const n = this.doc.order.length;
-    const h = this.layout.right.h;
+    const h = this.rightH();
     let i = this.doc.indexOf(this.top.key);
     let line = this.top.line + (fromCurrent ? 0 : dir);
     this.toast('searching…', 10000);
@@ -459,7 +548,7 @@ export class App {
       if (i >= n) i = 0;
       line = dir > 0 ? 0 : Number.MAX_SAFE_INTEGER;
     }
-    this.toast(`no match: ${this.query}`);
+    this.toast(`no match in this project: ${this.query}`);
   }
 
   private foundAt(key: string, line: number, h: number): void {
@@ -467,14 +556,14 @@ export class App {
     this.follow = false;
     this.pendingBottom = undefined;
     this.doc.preload(this.doc.indexOf(key));
-    this.syncLeft();
+    this.syncLists();
     this.toast(`match: ${this.query}`, 1500);
   }
 
   // ---------- export ----------
 
   private async exportTo(file: string): Promise<void> {
-    const key = this.focus === 'left' && this.layout.left ? this.list.selectedKey : this.currentKey();
+    const key = this.activePane() === 'sessions' ? this.list.selectedKey : this.currentKey();
     const e = key ? this.doc.entry(key) : undefined;
     if (!e || !file) return;
     try {
@@ -506,7 +595,7 @@ export class App {
     const cols = this.io.cols;
     const rows = this.io.rows;
     if (this.screen.cols !== cols || this.screen.rows !== rows) this.screen.resize(cols, rows);
-    this.layout = computeLayout(cols, rows, this.leftWidth, this.focus);
+    this.layout = computeLayout(cols, rows, this.widths, this.focus);
     const lay = this.layout;
     if (this.doc.getBase().width !== lay.right.w) {
       this.doc.setBase({ ...this.doc.getBase(), width: lay.right.w });
@@ -517,19 +606,22 @@ export class App {
       const bottom = this.doc.bottomKey(this.top, lay.right.h);
       if (this.doc.isLoaded(bottom) && this.doc.entry(bottom)?.live) this.top = this.doc.clampToEnd(this.doc.indexOf(bottom), lay.right.h);
     }
-    if (this.focus === 'right' || !lay.left) this.syncLeft();
+    // the session list follows the transcript unless the user is moving its selection
+    if (this.focus !== 'sessions') this.syncLists();
     this.screen.begin();
 
-    const showLeft = lay.left !== undefined && !(lay.single && this.focus === 'right');
-    const showRight = !(lay.single && this.focus === 'left');
-    const leftRows = showLeft ? this.list.render(lay.left!.w, lay.left!.h, this.focus === 'left', this.color) : [];
-    const rightRows = showRight ? this.renderRight(lay.right.w, lay.right.h) : [];
+    const showRight = !lay.single || this.focus === 'right';
+    const pRows = lay.projects ? this.projects.render(lay.projects.w, lay.projects.h, this.focus === 'projects', this.color) : [];
+    const sRows = lay.sessions ? this.list.render(lay.sessions.w, lay.sessions.h, this.focus === 'sessions', this.color) : [];
+    const rRows = showRight ? this.renderRight(lay.right.h) : [];
     const divider = this.color ? `\x1b[2m│\x1b[0m` : '│';
     for (let y = 0; y < rows - 1; y++) {
       let row = '';
-      if (showLeft) row += fitAnsi(leftRows[y] ?? '', lay.left!.w);
-      if (showLeft && showRight && lay.divider !== undefined) row += divider;
-      if (showRight) row += fitAnsi(rightRows[y] ?? '', lay.right.w);
+      if (lay.projects) row += fitAnsi(pRows[y] ?? '', lay.projects.w);
+      if (lay.div1 !== undefined) row += divider;
+      if (lay.sessions) row += fitAnsi(sRows[y] ?? '', lay.sessions.w);
+      if (lay.div2 !== undefined) row += divider;
+      if (showRight) row += fitAnsi(rRows[y] ?? '', lay.right.w);
       this.screen.set(y, row);
     }
     this.screen.set(lay.statusY, this.renderStatus(cols));
@@ -537,9 +629,9 @@ export class App {
     this.screen.flush();
   }
 
-  private renderRight(w: number, h: number): string[] {
+  private renderRight(h: number): string[] {
     if (!this.top) {
-      const msg = this.doc.order.length === 0 ? 'no sessions found' : '';
+      const msg = this.store.order().length === 0 ? 'no sessions found' : this.doc.order.length === 0 ? 'no sessions in this project' : '';
       return [msg];
     }
     const vis = this.doc.visible(this.top, h);
@@ -553,7 +645,6 @@ export class App {
       if (this.query && v.line.plain.toLowerCase().includes(this.query.toLowerCase())) a = highlightAnsi(a, v.line.plain, this.query);
       out.push(a);
     }
-    void w;
     return out;
   }
 
@@ -609,6 +700,11 @@ export class App {
 
   snapshot(): string[] {
     return this.screen.snapshot();
+  }
+
+  /** Current layout (for tests). */
+  layoutInfo(): Layout {
+    return this.layout;
   }
 
   async settle(maxMs = 1500): Promise<void> {

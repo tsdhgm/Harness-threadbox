@@ -22,6 +22,11 @@ export function refKey(ref: SessionRef): string {
   return `${ref.provider}:${ref.sessionId}`;
 }
 
+/** Key of the project group an entry belongs to (matches ProjectGroup.key). */
+export function groupKeyOf(e: SessionIndexEntry): string {
+  return `${e.ref.provider}:${e.project.key}`;
+}
+
 interface Loaded {
   reader: SessionReader & { offset?: number };
   session: Session;
@@ -207,7 +212,7 @@ export class SessionStore {
   groups(): ProjectGroup[] {
     const map = new Map<string, ProjectGroup>();
     for (const e of this.entries.values()) {
-      const gk = `${e.ref.provider}:${e.project.key}`;
+      const gk = groupKeyOf(e);
       let g = map.get(gk);
       if (!g) {
         g = { key: gk, name: e.project.name, cwd: e.project.cwd, lastActivity: 0, sessions: [] };

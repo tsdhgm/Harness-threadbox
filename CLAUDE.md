@@ -23,7 +23,8 @@ render/              pure functions: Turn → RenderedLine[] (transcript.ts), ma
                      width-aware wrap (wrap.ts), tool summaries (toolSummary.ts), per-session line cache with
                      prefix sums (lineCache.ts), Markdown export (markdownExport.ts)
 tui/                 hand-rolled terminal core (terminal/screen/input/layout), Document = continuous virtual
-                     viewport over all sessions (document.ts), App = state machine + key/mouse dispatch (app.ts)
+                     viewport over the sessions of ONE project group (document.ts, `setScope`), App = state machine +
+                     key/mouse dispatch (app.ts); widgets/projectList.ts (left) and widgets/sessionList.ts (middle)
 cli/                 arg parsing and the cat / list / export subcommands
 ```
 
@@ -31,7 +32,8 @@ Rules that keep this maintainable:
 - `render/` and `tui/` import only `core/types.ts` (+ `summarizeClaudeTool` as the default tool vocabulary). Provider-specific knowledge stays in `providers/*`.
 - `renderTurn` is pure; line counts are a function of `(turn, RenderOptions)`. `SessionLineCache` re-renders only `dirty` turns; `filterHash(opts)` (width, toggles, live, color, ascii) keys the cache.
 - The viewport cursor is `Top { key: sessionKey, line }` — anchored by session, never a global line number — so lazy loads and re-sorting above the viewport cannot move what the user sees. `Document.reanchor` keeps (block, offset) across re-renders of the top session.
-- Follow mode: `App.follow` is set by `G`, `L`, initial position, or scrolling onto the end of a live session; cleared by scrolling up or jumping. "Current session" = bottom visible session while following, else the top one (`App.currentKey`).
+- Three panes: projects │ sessions of `App.projectKey` │ transcript. `App.refreshLists()` rebuilds both lists and re-scopes the Document to the project, so scrolling in the right pane can never cross into another project; `selectProject()` switches project and lands at the end of its newest live (else last) session. `L` is the only navigation that changes project implicitly. Search is per project.
+- Follow mode: `App.follow` is set by `G`, `L`, initial position / project switch, or scrolling onto the end of a live session; cleared by scrolling up or jumping. "Current session" = bottom visible session while following, else the top one (`App.currentKey`).
 
 ## Claude Code log format (observed CLI 2.1.29x–2.1.30x, 2026-10)
 
@@ -61,5 +63,6 @@ Verify against real data before "fixing" a gap: `python3 -I` over a `.jsonl` bea
 - Hand-rolled TUI core instead of Ink/blessed/opentui: `@opentui/core` needs Node ≥ 26.4, Ink re-renders the whole tree and fights a line-addressed 100k-line viewport, blessed is unmaintained. ~600 lines in `tui/` do what we need.
 - `markdown-it` tokens + our own ANSI renderer (no `marked-terminal`) because wrapping must be display-width based and deterministic (line counts drive the viewport). CJK = 2 columns via `string-width` + grapheme segmentation.
 - Non-recursive `fs.watch` on `projects/` and each project dir + 2 s stat polling of live files. Recursive watch would cover `subagents/`/`tool-results/`/`memory/` and is unreliable for new dirs. Event names are never trusted; size is re-`stat`ed.
-- Ordering is chronological ascending (oldest top, live at the bottom) so the live session behaves like a terminal tail. The left list reorders when a background project becomes active; the right pane does not move (session-anchored cursor).
+- Ordering is chronological ascending (oldest top, live at the bottom) so the live session behaves like a terminal tail. The projects list reorders when a background project becomes active; the right pane does not move (session-anchored cursor, project-scoped document).
+- Layout: three panes from 80 columns (`defaultWidths` ≈ 15 % / 22 % / rest, mins 14 / 20 / 40); below that a single pane showing the focused one. `[`/`]` move the divider to the right of the focused pane.
 - Ambiguous-width glyphs (`⏺` `⎿` `✻`) can render as 2 cells in CJK-locale terminals → `--ascii` / `HTHREADBOX_ASCII=1`.

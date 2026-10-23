@@ -1,4 +1,4 @@
-import { type SessionStore, refKey } from '../core/sessionStore.js';
+import { type SessionStore, groupKeyOf, refKey } from '../core/sessionStore.js';
 import type { SessionIndexEntry } from '../core/types.js';
 import { sessionLabel } from '../core/types.js';
 import { SessionLineCache } from '../render/lineCache.js';
@@ -14,12 +14,14 @@ export type BaseRenderOptions = Omit<RenderOptions, 'live' | 'cwd'>;
 const PLACEHOLDER_LINES = 3;
 
 /**
- * Continuous virtual document over all sessions in store order.
+ * Continuous virtual document over the sessions in store order, optionally
+ * scoped to one project group (then scrolling never leaves that project).
  * The cursor is anchored by session key, never by a global line number.
  */
 export class Document {
   order: SessionIndexEntry[] = [];
   private keys: string[] = [];
+  private scope: string | undefined;
   private caches = new Map<string, SessionLineCache>();
   private placeholders = new Map<string, RenderedLine[]>();
   /** called when an async load completes (so the app can re-render) */
@@ -40,8 +42,18 @@ export class Document {
     return this.base;
   }
 
+  /** Restrict the document to one project group (ProjectGroup.key); undefined = all. Call refreshOrder() after. */
+  setScope(groupKey: string | undefined): void {
+    this.scope = groupKey;
+  }
+
+  getScope(): string | undefined {
+    return this.scope;
+  }
+
   refreshOrder(): void {
-    this.order = this.store.order();
+    const all = this.store.order();
+    this.order = this.scope === undefined ? all : all.filter((e) => groupKeyOf(e) === this.scope);
     this.keys = this.order.map((e) => refKey(e.ref));
     this.placeholders.clear();
   }
