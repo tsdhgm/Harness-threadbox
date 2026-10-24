@@ -1,3 +1,5 @@
+<p align="center"><b>English</b> | <a href="README.ja.md">日本語</a></p>
+
 # harness-threadbox (`hthreadbox`)
 
 A Linux console (TUI) viewer for AI coding-harness session logs. It shows the
