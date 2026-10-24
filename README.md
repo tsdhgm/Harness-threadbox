@@ -20,7 +20,8 @@ files Claude Code writes locally. It never launches or talks to Claude.
 
 - **Three panes.** Left: projects (repositories), most recently active at the
   bottom, with a live marker (`●` busy, `○` idle) and session count. Middle:
-  the sessions of the selected project. Right: the transcript rendered the way
+  the sessions of the selected project (time, first 8 characters of the id,
+  title). Right: the transcript rendered the way
   Claude Code itself prints it — `> prompt`, `⏺ text`, `⏺ Bash(cmd)` with
   `⎿ result` previews, `✻ Thinking…`, diff coloring for edits.
 - **Continuous scrolling within a project.** The right pane is one virtual

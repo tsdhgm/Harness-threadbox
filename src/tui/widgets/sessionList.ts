@@ -122,7 +122,9 @@ export class SessionList {
       const e = r.entry;
       const mark = liveMark(e.live, this.ascii);
       const time = fmtListTime(e.updatedAt ?? e.mtimeMs, now);
-      const prefix = ` ${mark.ch} ${time} `;
+      // first 8 chars of the session id when the pane is wide enough to leave room for a title
+      const id8 = w >= 30 ? e.ref.sessionId.slice(0, 8).padEnd(8) : '';
+      const prefix = ` ${mark.ch} ${time} ${id8 ? `${id8} ` : ''}`;
       const title = truncateToWidth(sessionLabel(e), Math.max(4, w - displayWidth(prefix)));
       const plainRow = padToWidth(`${prefix}${title}`, w);
       const selected = r.key === this.selectedKey;
@@ -134,7 +136,8 @@ export class SessionList {
         const bg = focused ? '\x1b[7m' : '\x1b[2;7m';
         out.push(`${bg}${plainRow}\x1b[0m`);
       } else {
-        out.push(` ${mark.sgr}${mark.ch}\x1b[0m \x1b[2m${time}\x1b[0m ${title}${' '.repeat(Math.max(0, w - displayWidth(plainRow)))}`);
+        const idPart = id8 ? `\x1b[2m${id8}\x1b[0m ` : '';
+        out.push(` ${mark.sgr}${mark.ch}\x1b[0m \x1b[2m${time}\x1b[0m ${idPart}${title}${' '.repeat(Math.max(0, w - displayWidth(plainRow)))}`);
       }
     }
     return out;

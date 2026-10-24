@@ -36,7 +36,7 @@ export const SINGLE_PANE_BELOW = 80;
 export function defaultWidths(cols: number): PaneWidths {
   return {
     projects: Math.max(MIN_PROJECTS, Math.min(28, Math.floor(cols * 0.15))),
-    sessions: Math.max(MIN_SESSIONS, Math.min(40, Math.floor(cols * 0.22))),
+    sessions: Math.max(MIN_SESSIONS, Math.min(44, Math.floor(cols * 0.25))),
   };
 }
 
