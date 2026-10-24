@@ -56,6 +56,9 @@ if (biggest) {
 const md = run(['export', 'latest', '-o', '-']);
 check('export produces markdown', md.startsWith('# ') && md.includes('## '), `${md.length} chars`);
 
+const id = run(['id']).trim();
+check('id prints a session id', /^[0-9a-f-]{8,}$/.test(id), id);
+
 const frames = run(['--frames', '2', '--size', '120x30', '--keys', 'k']);
 check('--frames renders two frames', frames.includes('---frame 0---') && frames.includes('---frame 1---'));
 

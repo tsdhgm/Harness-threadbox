@@ -8,6 +8,7 @@ import { sessionLabel } from '../core/types.js';
 import { sanitizeFilename, sessionToMarkdown } from '../render/markdownExport.js';
 import type { ToolsMode } from '../render/transcript.js';
 import { displayWidth, truncateToWidth } from '../render/width.js';
+import { copyToClipboard } from './clipboard.js';
 import { type BaseRenderOptions, Document, type Top } from './document.js';
 import { highlightAnsi } from './highlight.js';
 import { type InputEvent, InputParser, type KeyEvent, type MouseEvent, keyNameToBytes } from './input.js';
@@ -20,6 +21,11 @@ import { ProjectList } from './widgets/projectList.js';
 import { SessionList } from './widgets/sessionList.js';
 
 type Mode = 'normal' | 'search' | 'export' | 'help';
+
+export interface AppOptions {
+  /** copies text to the clipboard; returns the methods that worked (injected in tests) */
+  clipboard?: (text: string) => Promise<string[]>;
+}
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const newestFirst = (a: SessionIndexEntry, b: SessionIndexEntry): number => (b.updatedAt ?? b.mtimeMs) - (a.updatedAt ?? a.mtimeMs);
@@ -55,13 +61,16 @@ export class App {
   private searchGen = 0;
   private color: boolean;
   private pendingLoads = 0;
+  private clipboard: (text: string) => Promise<string[]>;
 
   constructor(
     private io: TerminalIO,
     private store: SessionStore,
     base: Omit<BaseRenderOptions, 'width'>,
+    opts: AppOptions = {},
   ) {
     this.color = base.color;
+    this.clipboard = opts.clipboard ?? (async (text) => (await copyToClipboard(text, { write: (s) => io.write(s), allowExternal: true })).methods);
     this.widths = defaultWidths(io.cols);
     this.layout = computeLayout(io.cols, io.rows, this.widths, this.focus);
     this.screen = new Screen(io, io.cols, io.rows);
@@ -356,8 +365,7 @@ export class App {
         this.widths = defaultWidths(this.io.cols);
         return;
       case 'e': {
-        const key = pane === 'sessions' ? this.list.selectedKey : this.currentKey();
-        const e = key ? this.doc.entry(key) : undefined;
+        const e = this.targetEntry(pane);
         if (!e) return;
         this.mode = 'export';
         this.lineInput = new LineInput('export to: ', path.join(process.cwd(), `${sanitizeFilename(sessionLabel(e))}.md`));
@@ -366,9 +374,26 @@ export class App {
       case 'r':
         void this.store.scan().then(() => this.toast('rescanned'));
         return;
+      case 'y':
+      case 'Y': {
+        const e = this.targetEntry(pane);
+        if (!e) return this.toast('no session');
+        const text = ev.name === 'y' ? e.ref.sessionId : `claude --resume ${e.ref.sessionId}`;
+        void this.clipboard(text).then(
+          (methods) => this.toast(`copied: ${text}  (${methods.join(', ')})`, 5000),
+          (err: unknown) => this.toast(`copy failed: ${err instanceof Error ? err.message : String(err)}`),
+        );
+        return;
+      }
       default:
         return;
     }
+  }
+
+  /** The session that y / Y / e act on: the selected one in the sessions pane, else the current one. */
+  private targetEntry(pane: Focus): SessionIndexEntry | undefined {
+    const key = pane === 'sessions' ? this.list.selectedKey : this.currentKey();
+    return key ? this.doc.entry(key) : undefined;
   }
 
   /** `[` / `]` move the divider to the right of the focused pane (projects → div1, otherwise div2). */
@@ -611,7 +636,7 @@ export class App {
     this.screen.begin();
 
     const showRight = !lay.single || this.focus === 'right';
-    const pRows = lay.projects ? this.projects.render(lay.projects.w, lay.projects.h, this.focus === 'projects', this.color) : [];
+    const pRows = lay.projects ? this.renderProjectsPane(lay.projects.w, lay.projects.h) : [];
     const sRows = lay.sessions ? this.list.render(lay.sessions.w, lay.sessions.h, this.focus === 'sessions', this.color) : [];
     const rRows = showRight ? this.renderRight(lay.right.h) : [];
     const divider = this.color ? `\x1b[2m│\x1b[0m` : '│';
@@ -627,6 +652,29 @@ export class App {
     this.screen.set(lay.statusY, this.renderStatus(cols));
     if (this.mode === 'help') this.renderHelp();
     this.screen.flush();
+  }
+
+  /** Projects list with a footer showing the full id of the current session (what `y` copies). */
+  private renderProjectsPane(w: number, h: number): string[] {
+    const footer = this.renderIdFooter(w, h);
+    const rows = this.projects.render(w, h - footer.length, this.focus === 'projects', this.color);
+    return [...rows, ...footer];
+  }
+
+  private renderIdFooter(w: number, h: number): string[] {
+    const e = this.targetEntry(this.activePane());
+    if (!e || w < 8) return [];
+    const id = e.ref.sessionId;
+    const chunks: string[] = [];
+    for (let i = 0; i < id.length; i += w) chunks.push(id.slice(i, i + w));
+    const hint = truncateToWidth('y copy id  Y copy resume cmd', w);
+    const withHint = h >= chunks.length + 1 + 1 + 6;
+    const needed = 1 + chunks.length + (withHint ? 1 : 0);
+    if (h < needed + 3) return [];
+    const dim = (s: string): string => (this.color ? `\x1b[2m${s}\x1b[0m` : s);
+    const out = [dim('─'.repeat(w)), ...chunks.map((c) => (this.color ? `\x1b[1m${c}\x1b[0m` : c))];
+    if (withHint) out.push(dim(hint));
+    return out;
   }
 
   private renderRight(h: number): string[] {
@@ -762,7 +810,7 @@ export async function runTui(args: ParsedArgs): Promise<number> {
     const io = new FakeTerminal(cols, rows);
     base.color = flagBool(args.flags, 'color');
     await ctx.store.scan();
-    const app = new App(io, ctx.store, base);
+    const app = new App(io, ctx.store, base, { clipboard: async () => ['fake'] });
     const done = app.run();
     await app.settle();
     const keys = (flagStr(args.flags, 'keys') ?? '').split(',').filter(Boolean);

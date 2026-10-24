@@ -40,6 +40,10 @@ files Claude Code writes locally. It never launches or talks to Claude.
   them on demand), `n`/`N` steps through matches. Toggle thinking text, cycle tool-output
   verbosity (collapsed / full / hidden), hide tool-only turns, show hidden
   meta records.
+- **Session id at hand.** The projects pane shows the full id of the session you
+  are looking at; `y` copies it to the clipboard and `Y` copies
+  `claude --resume <id>`, so resuming from another terminal is a paste away.
+  `hthreadbox id` prints it for scripts: `claude --resume "$(hthreadbox id)"`.
 - **Markdown export** of any session (`e` in the TUI, or `hthreadbox export`).
 - **Resizable panes** (`[`, `]`, `\`, or drag a divider with the mouse).
 - **Non-interactive modes** for piping and scripting: `cat`, `cat -f`, `list
@@ -131,6 +135,8 @@ hthreadbox cat live -f                       # follow the newest live session li
 hthreadbox cat 6aa06f9a --no-color --tools full --thinking --width 120
 hthreadbox export latest -o session.md       # Markdown export ( -o -  writes to stdout )
 hthreadbox list [--json] [--live]
+hthreadbox id [<session>]                    # print the full session id (default: latest)
+claude --resume "$(hthreadbox id)"           # resume the most recent session in a new terminal
 ```
 
 `<session>` is a session id, a unique id prefix, a path to a `.jsonl` file,
@@ -158,9 +164,16 @@ Global options: `--claude-dir DIR` (default `$CLAUDE_CONFIG_DIR` or
 | `h` | hide tool-only assistant turns | | |
 | `m` | show hidden meta records | | |
 | `[` `]` `\` | divider right of the focused pane −2 / +2 / reset both | | |
+| `y` / `Y` | copy session id / `claude --resume <id>` | copy selected | |
 | `e` | export to Markdown | export selected | |
 | `r` | rescan sessions | | |
 | `?` / `q` | help / quit | | |
+
+Clipboard (`y` / `Y`): the first available of `wl-copy`, `xclip`, `xsel`,
+`pbcopy`, `clip` / `clip.exe` (WSL) or `tmux load-buffer -w` is used, and the
+text is also sent to the terminal with OSC 52 (works over SSH in terminals that
+support it: Windows Terminal, kitty, foot, WezTerm, iTerm2 with the option on,
+xterm with `allowWindowOps`). The status bar reports which methods worked.
 
 Mouse: wheel scrolls the pane under the pointer, click selects, dragging a
 divider resizes. Below 80 columns only the focused pane is shown (`Tab` cycles).

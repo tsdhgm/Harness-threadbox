@@ -2,7 +2,7 @@
 import { createRequire } from 'node:module';
 import { parseArgs } from './cli/args.js';
 
-const COMMANDS = new Set(['tui', 'cat', 'export', 'list', 'help']);
+const COMMANDS = new Set(['tui', 'cat', 'export', 'list', 'id', 'help']);
 
 const HELP = `hthreadbox — console viewer for AI coding-harness session logs (Claude Code)
 
@@ -11,6 +11,7 @@ Usage:
   hthreadbox cat <session> [--no-color] [--tools full|collapsed|hidden] [--thinking] [--width N] [-f]
   hthreadbox export <session> [-o FILE | -o -] [--show-meta]
   hthreadbox list [--json] [--live]
+  hthreadbox id [<session>]            print the full session id, e.g.  claude --resume "$(hthreadbox id)"
 
 <session>: session id, unique id prefix, path to a .jsonl, "latest" (default) or "live".
 
@@ -43,6 +44,8 @@ async function main(argv: string[]): Promise<number> {
       return (await import('./cli/list.js')).listCommand(args);
     case 'export':
       return (await import('./cli/export.js')).exportCommand(args);
+    case 'id':
+      return (await import('./cli/id.js')).idCommand(args);
     case 'tui':
     case undefined:
       return (await import('./tui/app.js')).runTui(args);

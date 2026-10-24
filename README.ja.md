@@ -40,6 +40,10 @@ VS Code 拡張 [vsc-claude-threadbox](https://github.com/tosihide/vsc-claude-thr
   読み込み）、`n`/`N` で一致箇所を移動。thinking 本文の表示切替、ツール出力の
   詳細度の切替（折りたたみ / 全文 / 非表示）、ツール専用ターンの非表示、
   隠しメタレコードの表示。
+- **セッション ID が手元にある。** 左のプロジェクトペインに表示中セッションの完全な
+  ID を表示します。`y` で ID を、`Y` で `claude --resume <id>` をクリップボードに
+  コピーでき、別の端末で貼り付けるだけで再開できます。スクリプト向けには
+  `hthreadbox id` が ID を出力します: `claude --resume "$(hthreadbox id)"`。
 - **Markdown エクスポート。** 任意のセッションを出力（TUI の `e`、または
   `hthreadbox export`）。
 - **ペイン幅の変更。** `[`、`]`、`\`、またはマウスで境界をドラッグ。
@@ -131,6 +135,8 @@ hthreadbox cat live -f                       # 最新のライブセッション
 hthreadbox cat 6aa06f9a --no-color --tools full --thinking --width 120
 hthreadbox export latest -o session.md       # Markdown エクスポート（ -o - で stdout へ）
 hthreadbox list [--json] [--live]
+hthreadbox id [<session>]                    # 完全なセッション ID を出力（既定: 最新）
+claude --resume "$(hthreadbox id)"           # 別の端末で最新セッションを再開
 ```
 
 `<session>` にはセッション ID、一意に決まる ID の前方一致、`.jsonl` ファイルの
@@ -157,9 +163,16 @@ hthreadbox list [--json] [--live]
 | `h` | ツール専用のアシスタントターンを非表示 | | |
 | `m` | 隠しメタレコードを表示 | | |
 | `[` `]` `\` | フォーカス中ペインの右側の境界を −2 / +2 / 両方リセット | | |
+| `y` / `Y` | セッション ID / `claude --resume <id>` をコピー | 選択セッションをコピー | |
 | `e` | Markdown にエクスポート | 選択セッションをエクスポート | |
 | `r` | セッションを再走査 | | |
 | `?` / `q` | ヘルプ / 終了 | | |
+
+クリップボード（`y` / `Y`）: `wl-copy`、`xclip`、`xsel`、`pbcopy`、`clip` / `clip.exe`
+（WSL）、`tmux load-buffer -w` のうち最初に使えたものを使い、さらに OSC 52 で端末にも
+送ります（対応端末なら SSH 越しでも動作: Windows Terminal、kitty、foot、WezTerm、
+設定を有効にした iTerm2、`allowWindowOps` を有効にした xterm）。どの方法が成功したかは
+ステータスバーに表示されます。
 
 マウス: ホイールはポインタ下のペインをスクロール、クリックで選択、境界のドラッグで
 幅を変更。80 桁未満ではフォーカス中のペインだけを表示します（`Tab` で巡回）。

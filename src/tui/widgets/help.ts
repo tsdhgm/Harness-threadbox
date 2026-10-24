@@ -15,6 +15,7 @@ export const HELP_LINES: string[] = [
   '  h              hide tool-only assistant turns',
   '  m              show hidden meta records',
   '  [ ] \\          resize the divider right of the focused pane −2 / +2 / reset',
+  '  y / Y          copy session id / `claude --resume <id>` to the clipboard',
   '  e              export session to Markdown',
   '  r              rescan sessions',
   '  ?              this help      q / Ctrl-C  quit',

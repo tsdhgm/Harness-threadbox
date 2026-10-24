@@ -25,7 +25,7 @@ render/              pure functions: Turn → RenderedLine[] (transcript.ts), ma
 tui/                 hand-rolled terminal core (terminal/screen/input/layout), Document = continuous virtual
                      viewport over the sessions of ONE project group (document.ts, `setScope`), App = state machine +
                      key/mouse dispatch (app.ts); widgets/projectList.ts (left) and widgets/sessionList.ts (middle)
-cli/                 arg parsing and the cat / list / export subcommands
+cli/                 arg parsing and the cat / list / export / id subcommands
 ```
 
 Rules that keep this maintainable:
@@ -64,5 +64,6 @@ Verify against real data before "fixing" a gap: `python3 -I` over a `.jsonl` bea
 - `markdown-it` tokens + our own ANSI renderer (no `marked-terminal`) because wrapping must be display-width based and deterministic (line counts drive the viewport). CJK = 2 columns via `string-width` + grapheme segmentation.
 - Non-recursive `fs.watch` on `projects/` and each project dir + 2 s stat polling of live files. Recursive watch would cover `subagents/`/`tool-results/`/`memory/` and is unreliable for new dirs. Event names are never trusted; size is re-`stat`ed.
 - Ordering is chronological ascending (oldest top, live at the bottom) so the live session behaves like a terminal tail. The projects list reorders when a background project becomes active; the right pane does not move (session-anchored cursor, project-scoped document).
+- Clipboard (`tui/clipboard.ts`): `y`/`Y` try external tools in order (pbcopy, clip, wl-copy, xclip, xsel, clip.exe on WSL, `tmux load-buffer -w`) and always also emit OSC 52 via `TerminalIO.write`. `App` takes the copier through `AppOptions.clipboard` so tests and `--frames` never spawn processes. The projects pane footer shows the full id of `App.targetEntry()` (selected session in the sessions pane, else the current one).
 - Layout: three panes from 80 columns (`defaultWidths` ≈ 15 % / 22 % / rest, mins 14 / 20 / 40); below that a single pane showing the focused one. `[`/`]` move the divider to the right of the focused pane.
 - Ambiguous-width glyphs (`⏺` `⎿` `✻`) can render as 2 cells in CJK-locale terminals → `--ascii` / `HTHREADBOX_ASCII=1`.

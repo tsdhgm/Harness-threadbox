@@ -142,6 +142,38 @@ describe('App (e2e with FakeTerminal, three panes)', () => {
     await done;
   });
 
+  it('shows the current session id in the projects pane footer and copies it with y / Y', async () => {
+    const fp = new FakeProvider();
+    fp.add('s1', 'projA', toJsonl(basicRecords()));
+    fp.add('0123456789abcdef-0123-4567-89ab-cdef01234567', 'projB', toJsonl(basicRecords()), { live: true });
+    const store = new SessionStore([fp]);
+    await store.scan();
+    const io = new FakeTerminal(120, 24);
+    const copied: string[] = [];
+    const app = new App(io, store, base, {
+      clipboard: async (t) => {
+        copied.push(t);
+        return ['fake'];
+      },
+    });
+    const done = app.run();
+    await app.settle();
+    // the 44-char id is wrapped over the 18-column projects pane
+    const left = app.snapshot().map((r) => panes(r).projects.trimEnd());
+    const joined = left.filter((r) => /^[0-9a-f-]+$/.test(r)).join('');
+    expect(joined).toBe('0123456789abcdef-0123-4567-89ab-cdef01234567');
+    await app.feedKeys(['y'], io);
+    expect(copied).toEqual(['0123456789abcdef-0123-4567-89ab-cdef01234567']);
+    expect(app.snapshot().at(-1)).toContain('copied: 0123456789abcdef');
+    await app.feedKeys(['Y'], io);
+    expect(copied.at(-1)).toBe('claude --resume 0123456789abcdef-0123-4567-89ab-cdef01234567');
+    // in the sessions pane, y copies the *selected* session
+    await app.feedKeys(['Tab', 'k', 'Tab', 'k', 'y'], io);
+    expect(copied.at(-1)).toBe('s1');
+    io.feed('q');
+    await done;
+  });
+
   it('shows one pane at a time on narrow terminals', async () => {
     const fp = new FakeProvider();
     fp.add('s1', 'projA', toJsonl(basicRecords()));
