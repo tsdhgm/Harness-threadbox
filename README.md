@@ -160,7 +160,7 @@ Global options: `--follow-mode auto|always|off` (TUI), `--claude-dir DIR` (defau
 | `j`/`↓`, `k`/`↑` | scroll one line | move selection | switch project |
 | `PgDn`/`Space`/`Ctrl-f`, `PgUp`/`Ctrl-b` | page | page | page |
 | `d` / `u` | half page | | |
-| `g` / `G` | top / bottom of the project (`G` turns follow on) | first / last session | first / last project |
+| `g` / `G`, `<` / `>` | top / bottom of the project (`G` turns follow on) | first / last session | first / last project |
 | `Tab` / `Shift-Tab` | cycle focus: projects → sessions → transcript | | |
 | `Enter` / click | | show the selected session | go to its session list |
 | `L` | jump to the next live session (any project) | | |

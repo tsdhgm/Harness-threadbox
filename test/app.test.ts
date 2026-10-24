@@ -202,7 +202,7 @@ describe('App (e2e with FakeTerminal, three panes)', () => {
     frame = app.snapshot();
     expect(frame.slice(0, -1).map((r) => panes(r).right)).toEqual(still);
     // G in off mode shows the end but does not pin it
-    await app.feedKeys(['G'], io);
+    await app.feedKeys(['>'], io); // less-style alias of G
     expect(app.snapshot().some((r) => r.includes('third late reply'))).toBe(true);
     io.feed('q');
     await done;

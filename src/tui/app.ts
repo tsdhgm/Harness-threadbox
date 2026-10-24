@@ -337,11 +337,13 @@ export class App {
       case 'u':
         return pane === 'right' ? this.scroll(-Math.floor(h / 2)) : undefined;
       case 'g':
+      case '<':
       case 'home':
         if (pane === 'projects') return this.switchProject(this.projects.first());
         if (pane === 'sessions') return void this.list.first();
         return this.jumpTo(this.doc.keyAt(0), false);
       case 'G':
+      case '>':
       case 'end':
         if (pane === 'projects') return this.switchProject(this.projects.last());
         if (pane === 'sessions') return void this.list.last();

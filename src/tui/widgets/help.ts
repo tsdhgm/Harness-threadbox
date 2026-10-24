@@ -6,7 +6,7 @@ export const HELP_LINES: string[] = [
   '  Tab / Shift-Tab  cycle focus  projects → sessions → transcript',
   '  j/k ↑/↓        scroll 1 line / move selection (projects: switches project)',
   '  PgDn/PgUp Space scroll page       d/u  half page',
-  '  g / G          top / bottom of the project (G enables follow)',
+  '  g / G  < / >   top / bottom of the project (G enables follow)',
   '  Enter / click  projects: go to its session list · sessions: show session',
   '  L              jump to the next live session (any project)',
   '  F              follow mode: auto (tail at end) → always (jump on update) → off (static)',
