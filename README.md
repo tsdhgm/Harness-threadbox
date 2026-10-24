@@ -180,6 +180,10 @@ yet; the data model has room for them.
 
 ## Development
 
+For a beginner-friendly explanation of the languages, libraries and terminal
+techniques used here, see [docs/TECHNOLOGY.md](docs/TECHNOLOGY.md)
+(Japanese translation: [docs/TECHNOLOGY.ja.md](docs/TECHNOLOGY.ja.md)).
+
 ```bash
 npm run dev -- list            # run from source with tsx
 npm test                       # vitest (fixtures in test/fixtures)
