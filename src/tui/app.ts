@@ -22,9 +22,19 @@ import { SessionList } from './widgets/sessionList.js';
 
 type Mode = 'normal' | 'search' | 'export' | 'help';
 
+/**
+ * How the transcript reacts when the session being viewed receives new content:
+ * - auto:   tail only while the end is on screen; scrolling up detaches (like `less +F`)
+ * - always: jump to the end on every update of the viewed session, even after scrolling up
+ * - off:    never move the viewport (static); new lines accumulate below
+ */
+export type FollowMode = 'auto' | 'always' | 'off';
+export const FOLLOW_MODES: FollowMode[] = ['auto', 'always', 'off'];
+
 export interface AppOptions {
   /** copies text to the clipboard; returns the methods that worked (injected in tests) */
   clipboard?: (text: string) => Promise<string[]>;
+  followMode?: FollowMode;
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -45,7 +55,9 @@ export class App {
   /** ProjectGroup.key of the project shown in the middle/right panes */
   private projectKey: string | undefined;
   private top: Top | undefined;
+  /** pinned to the end of the current session (meaningful in auto/always modes) */
   private follow = true;
+  private followMode: FollowMode = 'auto';
   private pendingBottom: string | undefined;
   private widths: PaneWidths;
   private mode: Mode = 'normal';
@@ -70,6 +82,7 @@ export class App {
     opts: AppOptions = {},
   ) {
     this.color = base.color;
+    this.followMode = opts.followMode ?? 'auto';
     this.clipboard = opts.clipboard ?? (async (text) => (await copyToClipboard(text, { write: (s) => io.write(s), allowExternal: true })).methods);
     this.widths = defaultWidths(io.cols);
     this.layout = computeLayout(io.cols, io.rows, this.widths, this.focus);
@@ -154,7 +167,7 @@ export class App {
     this.landAtEnd(target);
   }
 
-  /** Put the last line of session `key` on the last row and follow it. */
+  /** Put the last line of session `key` on the last row and (unless static) follow it. */
   private landAtEnd(key: string): void {
     const i = this.doc.indexOf(key);
     if (i < 0) return;
@@ -165,7 +178,7 @@ export class App {
       this.top = this.doc.topOf(key);
       this.pendingBottom = key;
     }
-    this.follow = true;
+    this.follow = this.followMode !== 'off';
     this.doc.preload(i);
     this.syncLists();
   }
@@ -197,7 +210,12 @@ export class App {
         const before = this.top.key === ev.key ? this.doc.locate(this.top) : undefined;
         this.doc.cache(ev.key); // re-render dirty turns now
         if (this.doc.indexOf(ev.key) < 0) break; // another project
-        if (this.follow && (this.doc.bottomKey(this.top, h) === ev.key || this.top.key === ev.key)) {
+        const viewed = this.currentKey();
+        if (this.followMode === 'always' && ev.key === viewed) {
+          // dynamic mode: any update of the viewed session shows its end
+          this.follow = true;
+          this.top = this.doc.clampToEnd(this.doc.indexOf(ev.key), h);
+        } else if (this.followMode !== 'off' && this.follow && (this.doc.bottomKey(this.top, h) === ev.key || this.top.key === ev.key)) {
           this.top = this.doc.clampToEnd(this.doc.indexOf(ev.key), h);
         } else if (this.top.key === ev.key) {
           this.top = ev.reset ? this.doc.clamp(this.top, h) : this.doc.reanchor(this.top, ev.key, before);
@@ -336,6 +354,8 @@ export class App {
         return;
       case 'L':
         return this.nextLive();
+      case 'F':
+        return this.cycleFollowMode();
       case '/':
         this.mode = 'search';
         this.lineInput = new LineInput('/', this.query);
@@ -467,7 +487,28 @@ export class App {
     const h = this.rightH();
     const bottom = this.doc.bottomKey(this.top, h);
     const e = this.doc.entry(bottom);
-    if (e?.live && this.doc.showsEndOf(this.top, h, bottom)) this.follow = true;
+    if (this.followMode !== 'off' && e?.live && this.doc.showsEndOf(this.top, h, bottom)) this.follow = true;
+  }
+
+  /** F: auto → always → off → auto */
+  private cycleFollowMode(): void {
+    const next = FOLLOW_MODES[(FOLLOW_MODES.indexOf(this.followMode) + 1) % FOLLOW_MODES.length]!;
+    this.setFollowMode(next);
+  }
+
+  setFollowMode(mode: FollowMode): void {
+    this.followMode = mode;
+    if (mode === 'off') this.follow = false;
+    else if (mode === 'always') {
+      const k = this.currentKey();
+      if (k) this.landAtEnd(k);
+    }
+    const desc = { auto: 'auto (tail while the end is on screen)', always: 'always (jump to the end on every update)', off: 'off (static view)' }[mode];
+    this.toast(`follow: ${desc}`, 2500);
+  }
+
+  getFollowMode(): FollowMode {
+    return this.followMode;
   }
 
   /** Move the project selection and switch the other panes to it. */
@@ -626,7 +667,7 @@ export class App {
       this.doc.setBase({ ...this.doc.getBase(), width: lay.right.w });
       if (this.top) this.top = this.doc.clamp(this.top, lay.right.h);
     }
-    if (this.top && this.follow && this.pendingBottom === undefined) {
+    if (this.top && this.follow && this.followMode !== 'off' && this.pendingBottom === undefined) {
       // keep the end pinned while following
       const bottom = this.doc.bottomKey(this.top, lay.right.h);
       if (this.doc.isLoaded(bottom) && this.doc.entry(bottom)?.live) this.top = this.doc.clampToEnd(this.doc.indexOf(bottom), lay.right.h);
@@ -711,7 +752,9 @@ export class App {
         if (e.model) parts.push(e.model.replace(/^claude-/, ''));
         if (e.live) parts.push(`LIVE ${e.live.status === 'unknown' ? '' : e.live.status}`.trim());
       }
-      if (this.follow) parts.push('FOLLOW');
+      if (this.followMode === 'off') parts.push('STATIC');
+      else if (this.followMode === 'always') parts.push('FOLLOW:always');
+      else if (this.follow) parts.push('FOLLOW');
       leftText = parts.join(' · ');
     }
     const flags = `t:${b.thinking ? 'on' : 'off'} o:${b.tools} h:${b.hideToolOnly ? 'on' : 'off'}${b.showMeta ? ' m:on' : ''}`;
@@ -801,6 +844,8 @@ export async function runTui(args: ParsedArgs): Promise<number> {
     color: useColor(args.flags, process.stdout.isTTY === true),
     ascii: flagBool(args.flags, 'ascii') || process.env['HTHREADBOX_ASCII'] === '1',
   };
+  const fm = flagStr(args.flags, 'follow-mode');
+  const followMode: FollowMode = fm === 'always' || fm === 'off' ? fm : 'auto';
 
   if (framesN !== undefined) {
     const size = flagStr(args.flags, 'size') ?? '120x40';
@@ -810,7 +855,7 @@ export async function runTui(args: ParsedArgs): Promise<number> {
     const io = new FakeTerminal(cols, rows);
     base.color = flagBool(args.flags, 'color');
     await ctx.store.scan();
-    const app = new App(io, ctx.store, base, { clipboard: async () => ['fake'] });
+    const app = new App(io, ctx.store, base, { clipboard: async () => ['fake'], followMode });
     const done = app.run();
     await app.settle();
     const keys = (flagStr(args.flags, 'keys') ?? '').split(',').filter(Boolean);
@@ -834,6 +879,6 @@ export async function runTui(args: ParsedArgs): Promise<number> {
     return 2;
   }
   await ctx.store.scan();
-  const app = new App(io, ctx.store, base);
+  const app = new App(io, ctx.store, base, { followMode });
   return app.run();
 }

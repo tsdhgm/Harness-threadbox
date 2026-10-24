@@ -9,6 +9,7 @@ export const HELP_LINES: string[] = [
   '  g / G          top / bottom of the project (G enables follow)',
   '  Enter / click  projects: go to its session list · sessions: show session',
   '  L              jump to the next live session (any project)',
+  '  F              follow mode: auto (tail at end) → always (jump on update) → off (static)',
   '  /  n  N        search in this project / next / previous match',
   '  t              toggle thinking text',
   '  o              tool output: collapsed → full → hidden',

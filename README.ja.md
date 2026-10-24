@@ -33,7 +33,11 @@ VS Code 拡張 [vsc-claude-threadbox](https://github.com/tosihide/vsc-claude-thr
 - **ライブ追従。** 実行中セッションは `~/.claude/sessions/` から検出します。
   ライブセッションの末尾を表示していると新しいターンが追記され、表示が末尾に
   張り付きます（ステータスバーに `FOLLOW`）。結果待ちのツール呼び出しは、結果が
-  届くまで `⎿ Running…` と表示されます。
+  届くまで `⎿ Running…` と表示されます。`F` で追従モードを切り替えられます。
+  **auto**（末尾が画面内にあるときだけ追従。上にスクロールすると解除）、
+  **always**（閲覧中のセッションが更新されるたびに末尾へジャンプ。上にスクロール
+  していても戻る。表示は `FOLLOW:always`）、**off**（静止。表示を動かさない。
+  `STATIC`）。起動時の既定は `--follow-mode always|off` で変更できます。
 - **ツールごとの要約表示。** コマンド、ファイルパス、`Added N lines, removed M` と
   色付き差分、`Read N lines`、エージェントの説明、Web 検索語、MCP ツール名。
 - **検索とフィルタ。** `/` でプロジェクト内のセッションを横断検索（必要に応じて
@@ -142,7 +146,7 @@ claude --resume "$(hthreadbox id)"           # 別の端末で最新セッショ
 `<session>` にはセッション ID、一意に決まる ID の前方一致、`.jsonl` ファイルの
 パス、`latest`（既定）、`live` のいずれかを指定します。
 
-共通オプション: `--claude-dir DIR`（既定は `$CLAUDE_CONFIG_DIR` または
+共通オプション: `--follow-mode auto|always|off`（TUI）、`--claude-dir DIR`（既定は `$CLAUDE_CONFIG_DIR` または
 `~/.claude`）、`--project PATH`、`--ascii`（`⏺`/`⎿`/`✻` を 2 マス幅で描く端末向けに
 `*`/`L`/`~` を使う）、`--no-color`（`NO_COLOR` / `FORCE_COLOR` も尊重）。
 
@@ -157,6 +161,7 @@ claude --resume "$(hthreadbox id)"           # 別の端末で最新セッショ
 | `Tab` / `Shift-Tab` | フォーカスを巡回: プロジェクト → セッション → トランスクリプト | | |
 | `Enter` / クリック | | 選択セッションを表示 | そのセッション一覧へ |
 | `L` | 次のライブセッションへジャンプ（全プロジェクト対象） | | |
+| `F` | 追従モード: auto → always → off | | |
 | `/`、`n`、`N` | プロジェクト内を検索、次、前 | | |
 | `t` | thinking 本文の表示切替 | | |
 | `o` | ツール出力: 折りたたみ → 全文 → 非表示 | | |

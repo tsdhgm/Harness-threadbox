@@ -174,6 +174,40 @@ describe('App (e2e with FakeTerminal, three panes)', () => {
     await done;
   });
 
+  it('follow modes: always jumps to the end on update, off never moves the view', async () => {
+    const { app, io, fp, done } = await start(12);
+    // auto (default): scrolling up detaches, an append does not move the view
+    await app.feedKeys(['k', 'k'], io);
+    const before = app.snapshot().at(-1)!;
+    expect(before).not.toContain('FOLLOW');
+    fp.append('s3', toJsonl([human(60, 'first late prompt'), ...assistant(61, 'mA', [text('first late reply')])]));
+    await app.settle();
+    expect(app.snapshot().some((r) => r.includes('first late reply'))).toBe(false);
+    // F → always: lands at the end now, and every later append snaps back to the end even after scrolling up
+    await app.feedKeys(['F'], io);
+    expect(app.getFollowMode()).toBe('always');
+    expect(app.snapshot().some((r) => r.includes('first late reply'))).toBe(true);
+    await app.feedKeys(['k', 'k', 'k'], io);
+    fp.append('s3', toJsonl([human(70, 'second late prompt'), ...assistant(71, 'mB', [text('second late reply')])]));
+    await app.settle();
+    let frame = app.snapshot();
+    expect(frame.some((r) => r.includes('second late reply'))).toBe(true);
+    // F → off: static; an append leaves the viewport exactly where it is
+    await app.feedKeys(['F'], io);
+    expect(app.getFollowMode()).toBe('off');
+    await app.feedKeys(['k', 'k'], io);
+    const still = app.snapshot().slice(0, -1).map((r) => panes(r).right);
+    fp.append('s3', toJsonl([human(80, 'third late prompt'), ...assistant(81, 'mC', [text('third late reply')])]));
+    await app.settle();
+    frame = app.snapshot();
+    expect(frame.slice(0, -1).map((r) => panes(r).right)).toEqual(still);
+    // G in off mode shows the end but does not pin it
+    await app.feedKeys(['G'], io);
+    expect(app.snapshot().some((r) => r.includes('third late reply'))).toBe(true);
+    io.feed('q');
+    await done;
+  });
+
   it('shows one pane at a time on narrow terminals', async () => {
     const fp = new FakeProvider();
     fp.add('s1', 'projA', toJsonl(basicRecords()));

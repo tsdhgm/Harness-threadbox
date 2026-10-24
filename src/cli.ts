@@ -7,7 +7,7 @@ const COMMANDS = new Set(['tui', 'cat', 'export', 'list', 'id', 'help']);
 const HELP = `hthreadbox — console viewer for AI coding-harness session logs (Claude Code)
 
 Usage:
-  hthreadbox [tui] [--claude-dir DIR] [--project PATH] [--ascii]
+  hthreadbox [tui] [--claude-dir DIR] [--project PATH] [--ascii] [--follow-mode auto|always|off]
   hthreadbox cat <session> [--no-color] [--tools full|collapsed|hidden] [--thinking] [--width N] [-f]
   hthreadbox export <session> [-o FILE | -o -] [--show-meta]
   hthreadbox list [--json] [--live]
@@ -19,6 +19,8 @@ Options:
   --claude-dir DIR   Claude config dir (default: $CLAUDE_CONFIG_DIR or ~/.claude)
   --project PATH     only sessions of this project directory
   --ascii            use ASCII glyphs instead of ⏺ ⎿ ✻
+  --follow-mode MODE TUI follow mode: auto (tail while at the end, default), always (jump to the end
+                     whenever the viewed session changes), off (static; F cycles at runtime)
   --no-color         disable ANSI colors (also NO_COLOR)
   --frames N         (debug) render N TUI frames to stdout; with --size WxH --keys k1,k2,...
   -h, --help         show help

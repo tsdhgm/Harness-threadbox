@@ -33,7 +33,11 @@ files Claude Code writes locally. It never launches or talks to Claude.
 - **Live tail.** Running sessions are detected from `~/.claude/sessions/`.
   While you are at the bottom of a live session, new turns append and the view
   sticks to the end (`FOLLOW` in the status bar). Pending tool calls show
-  `⎿ Running…` until their result arrives.
+  `⎿ Running…` until their result arrives. `F` cycles the follow mode:
+  **auto** (tail only while the end is on screen; scrolling up detaches),
+  **always** (jump to the end whenever the viewed session changes, even after
+  scrolling up; `FOLLOW:always`), **off** (static view, `STATIC`). Start with
+  `--follow-mode always|off` to change the default.
 - **Tool summaries** per tool: command, file path, `Added N lines, removed M`
   with a colored diff, `Read N lines`, agent description, web query, MCP tool
   names.
@@ -143,7 +147,7 @@ claude --resume "$(hthreadbox id)"           # resume the most recent session in
 `<session>` is a session id, a unique id prefix, a path to a `.jsonl` file,
 `latest` (default) or `live`.
 
-Global options: `--claude-dir DIR` (default `$CLAUDE_CONFIG_DIR` or
+Global options: `--follow-mode auto|always|off` (TUI), `--claude-dir DIR` (default `$CLAUDE_CONFIG_DIR` or
 `~/.claude`), `--project PATH`, `--ascii` (use `*`/`L`/`~` instead of
 `⏺`/`⎿`/`✻` for terminals that draw those as double width), `--no-color`
 (also honours `NO_COLOR` / `FORCE_COLOR`).
@@ -159,6 +163,7 @@ Global options: `--claude-dir DIR` (default `$CLAUDE_CONFIG_DIR` or
 | `Tab` / `Shift-Tab` | cycle focus: projects → sessions → transcript | | |
 | `Enter` / click | | show the selected session | go to its session list |
 | `L` | jump to the next live session (any project) | | |
+| `F` | follow mode: auto → always → off | | |
 | `/`, `n`, `N` | search within the project, next, previous | | |
 | `t` | toggle thinking text | | |
 | `o` | tool output: collapsed → full → hidden | | |
