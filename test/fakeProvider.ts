@@ -10,13 +10,13 @@ export class FakeProvider implements Provider {
   sessions = new Map<string, { entry: SessionIndexEntry; lines: string[]; consumed: number }>();
   handlers: Array<(ev: WatchEvent) => void> = [];
 
-  add(sessionId: string, project: string, jsonl: string, opts: { live?: boolean; startedAt?: number } = {}): SessionIndexEntry {
+  add(sessionId: string, project: string, jsonl: string, opts: { live?: boolean; startedAt?: number; updatedAt?: number } = {}): SessionIndexEntry {
     const entry: SessionIndexEntry = {
       ref: { provider: 'claude', sessionId, path: `/fake/${project}/${sessionId}.jsonl`, projectKey: project },
       project: { key: project, cwd: `/work/${project}`, name: project },
       title: `title ${sessionId}`,
       startedAt: opts.startedAt ?? Date.parse('2026-10-24T00:00:00Z') + this.sessions.size * 3600_000,
-      updatedAt: opts.startedAt ?? Date.parse('2026-10-24T00:00:00Z') + this.sessions.size * 3600_000,
+      updatedAt: opts.updatedAt ?? opts.startedAt ?? Date.parse('2026-10-24T00:00:00Z') + this.sessions.size * 3600_000,
       mtimeMs: Date.now(),
       sizeBytes: jsonl.length,
       live: opts.live ? { pid: 1, status: 'busy', source: 'registry' } : null,

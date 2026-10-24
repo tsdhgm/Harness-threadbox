@@ -16,7 +16,7 @@ Binary: `hthreadbox` (`dist/cli.js`). Console counterpart of `vsc-claude-threadb
 ```
 core/types.ts        normalized model: Session / Turn / Block / ToolCall / SessionIndexEntry / LiveState
 core/provider.ts     Provider interface (scanIndex, indexOne, open→SessionReader{load,pull}, liveStates, watch, resolveArg, summarizeTool)
-core/sessionStore.ts registry of index entries, document ORDER (projects by last activity asc, sessions by start asc),
+core/sessionStore.ts registry of index entries, document ORDER (projects by last activity asc, sessions by last activity asc),
                      LRU of loaded sessions (protects visible keys), watch-event handling, events: index/session/live/loaded
 providers/claude/    the only provider so far (see below)
 render/              pure functions: Turn → RenderedLine[] (transcript.ts), markdown→ANSI (markdown.ts),
@@ -63,7 +63,7 @@ Verify against real data before "fixing" a gap: `python3 -I` over a `.jsonl` bea
 - Hand-rolled TUI core instead of Ink/blessed/opentui: `@opentui/core` needs Node ≥ 26.4, Ink re-renders the whole tree and fights a line-addressed 100k-line viewport, blessed is unmaintained. ~600 lines in `tui/` do what we need.
 - `markdown-it` tokens + our own ANSI renderer (no `marked-terminal`) because wrapping must be display-width based and deterministic (line counts drive the viewport). CJK = 2 columns via `string-width` + grapheme segmentation.
 - Non-recursive `fs.watch` on `projects/` and each project dir + 2 s stat polling of live files. Recursive watch would cover `subagents/`/`tool-results/`/`memory/` and is unreliable for new dirs. Event names are never trusted; size is re-`stat`ed.
-- Ordering is chronological ascending (oldest top, live at the bottom) so the live session behaves like a terminal tail. The projects list reorders when a background project becomes active; the right pane does not move (session-anchored cursor, project-scoped document).
+- Ordering is by last activity ascending (oldest top, live at the bottom) so the live session behaves like a terminal tail. Sessions sort by the same timestamp the list shows (`activityOf` = `updatedAt ?? mtimeMs`), not by start time: a session resumed with `claude --resume` moves to the bottom instead of staying where it started, so scrolling down in the right pane always reaches a more recently active session. The projects list reorders when a background project becomes active; the right pane does not move (session-anchored cursor, project-scoped document).
 - Clipboard (`tui/clipboard.ts`): `y`/`Y` try external tools in order (pbcopy, clip, wl-copy, xclip, xsel, clip.exe on WSL, `tmux load-buffer -w`) and always also emit OSC 52 via `TerminalIO.write`. `App` takes the copier through `AppOptions.clipboard` so tests and `--frames` never spawn processes. The projects pane footer shows the full id of `App.targetEntry()` (selected session in the sessions pane, else the current one).
 - Layout: three panes from 80 columns (`defaultWidths` ≈ 15 % / 25 % / rest, mins 14 / 20 / 40); below that a single pane showing the focused one. Session rows show the first 8 chars of the id when the middle pane is ≥ 30 columns. `[`/`]` move the divider to the right of the focused pane.
 - Ambiguous-width glyphs (`⏺` `⎿` `✻`) can render as 2 cells in CJK-locale terminals → `--ascii` / `HTHREADBOX_ASCII=1`.

@@ -23,6 +23,11 @@ export function refKey(ref: SessionRef): string {
 }
 
 /** Key of the project group an entry belongs to (matches ProjectGroup.key). */
+/** Timestamp of the last activity of a session — the one shown in the lists and used for ordering. */
+export function activityOf(e: SessionIndexEntry): number {
+  return e.updatedAt ?? e.mtimeMs;
+}
+
 export function groupKeyOf(e: SessionIndexEntry): string {
   return `${e.ref.provider}:${e.project.key}`;
 }
@@ -201,7 +206,7 @@ export class SessionStore {
     if (changed) this.events.emit({ kind: 'live' });
   }
 
-  /** All entries in document order: projects by last activity asc, sessions by start asc. */
+  /** All entries in document order: projects by last activity asc, sessions by last activity asc. */
   order(): SessionIndexEntry[] {
     if (this.orderCache) return this.orderCache;
     const groups = this.groups();
@@ -223,10 +228,13 @@ export class SessionStore {
         g.name = e.project.name;
       }
       g.sessions.push(e);
-      g.lastActivity = Math.max(g.lastActivity, e.updatedAt ?? e.mtimeMs);
+      g.lastActivity = Math.max(g.lastActivity, activityOf(e));
     }
     const groups = [...map.values()];
-    for (const g of groups) g.sessions.sort((a, b) => (a.startedAt ?? a.mtimeMs) - (b.startedAt ?? b.mtimeMs) || a.ref.sessionId.localeCompare(b.ref.sessionId));
+    // Sessions sort by the same timestamp the list displays (last activity), so a session
+    // resumed with `claude --resume` moves below the ones it was started before and the
+    // right pane never scrolls "down" into an older transcript.
+    for (const g of groups) g.sessions.sort((a, b) => activityOf(a) - activityOf(b) || (a.startedAt ?? 0) - (b.startedAt ?? 0) || a.ref.sessionId.localeCompare(b.ref.sessionId));
     groups.sort((a, b) => a.lastActivity - b.lastActivity || a.key.localeCompare(b.key));
     return groups;
   }

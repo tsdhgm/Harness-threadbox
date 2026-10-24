@@ -32,6 +32,24 @@ describe('Document', () => {
     expect(first.kind).toBe('header');
   });
 
+  it('orders sessions by last activity, so a resumed session sorts below newer-started ones', async () => {
+    const fp = new FakeProvider();
+    const t0 = Date.parse('2026-10-24T00:00:00Z');
+    // old: started first, resumed today (updated last); mid/new: started later, untouched since
+    fp.add('old', 'projA', toJsonl(basicRecords()), { startedAt: t0, updatedAt: t0 + 10 * 3600_000 });
+    fp.add('mid', 'projA', toJsonl(basicRecords()), { startedAt: t0 + 3600_000 });
+    fp.add('new', 'projA', toJsonl(basicRecords()), { startedAt: t0 + 2 * 3600_000 });
+    const store = new SessionStore([fp]);
+    await store.scan();
+    expect(store.groups()[0]!.sessions.map((e) => e.ref.sessionId)).toEqual(['mid', 'new', 'old']);
+    // an append that advances updatedAt moves the session to the bottom
+    await store.load(store.get('claude:mid')!);
+    store.startWatching();
+    fp.append('mid', toJsonl([human(5, 'later', { timestamp: new Date(t0 + 20 * 3600_000).toISOString() })]));
+    await sleep(20);
+    expect(store.groups()[0]!.sessions.map((e) => e.ref.sessionId)).toEqual(['new', 'old', 'mid']);
+  });
+
   it('scopes the document to one project and clamps scrolling at its edges', async () => {
     const { doc, store } = await setup();
     doc.setScope('claude:projA');
