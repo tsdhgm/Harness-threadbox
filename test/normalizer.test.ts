@@ -19,7 +19,7 @@ describe('normalizer', () => {
     // usage counted once (last chunk wins), not summed
     expect(a1.meta.usage?.outputTokens).toBe(20);
     expect(visible[2]!.meta.durationMs).toBe(1234);
-    expect(s.index.title).toBe('Remote の進捗確認');
+    expect(s.index.title).toBe('Check remote progress');
     expect(s.parse.skippedTypes.get('mode')).toBe(2);
     expect(s.parse.skippedTypes.get('last-prompt')).toBe(1);
   });
@@ -39,7 +39,7 @@ describe('normalizer', () => {
     const kinds = s.turns.map((t) => `${t.role}:${t.meta.hidden ? 'hidden' : 'shown'}:${t.blocks[0]?.kind}`);
     expect(kinds).toEqual(['user:shown:text', 'user:hidden:text', 'system:shown:notice', 'assistant:shown:text']);
     const first = s.turns[0]!.blocks[0]!;
-    expect(first.kind === 'text' && first.text).toBe('実際の質問');
+    expect(first.kind === 'text' && first.text).toBe('the actual question');
     const notice = s.turns[2]!.blocks[0]!;
     expect(notice.kind === 'notice' && notice.text).toBe('task abc12345 completed: done it');
   });

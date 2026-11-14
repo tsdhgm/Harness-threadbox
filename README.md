@@ -1,4 +1,4 @@
-<p align="center"><b>English</b> | <a href="README.ja.md">日本語</a></p>
+<p align="center"><b>English</b> | <a href="README_ja.md">日本語</a></p>
 
 # harness-threadbox (`hthreadbox`)
 
@@ -204,7 +204,7 @@ yet; the data model has room for them.
 
 For a beginner-friendly explanation of the languages, libraries and terminal
 techniques used here, see [docs/TECHNOLOGY.md](docs/TECHNOLOGY.md)
-(Japanese translation: [docs/TECHNOLOGY.ja.md](docs/TECHNOLOGY.ja.md)).
+(Japanese translation: [docs/TECHNOLOGY_ja.md](docs/TECHNOLOGY_ja.md)).
 
 ```bash
 npm run dev -- list            # run from source with tsx

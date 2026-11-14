@@ -13,8 +13,8 @@ describe('indexer', () => {
     expect(e.ref.sessionId).toBe('sess-0001');
     expect(e.project.cwd).toBe('/work/proj');
     expect(e.project.name).toBe('proj');
-    expect(e.title).toBe('Remote の進捗確認');
-    expect(e.firstPrompt).toBe('remote を確認して。どこまで進んだか忘れた');
+    expect(e.title).toBe('Check remote progress');
+    expect(e.firstPrompt).toBe('Check the remote. I forgot how far we got');
     expect(e.startedAt).toBeLessThan(e.updatedAt!);
     expect(e.gitBranch).toBe('main');
     expect(e.model).toBe('claude-fable-5-1');

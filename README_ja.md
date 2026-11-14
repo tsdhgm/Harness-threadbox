@@ -202,7 +202,7 @@ cwd  →  realpath  →  /[^A-Za-z0-9-]/ を "-" に置換  →  ~/.claude/proje
 
 使用している言語・ライブラリ・端末制御技術の入門者向け解説は
 [docs/TECHNOLOGY.md](docs/TECHNOLOGY.md)（英語）と、その日本語訳
-[docs/TECHNOLOGY.ja.md](docs/TECHNOLOGY.ja.md) を参照してください。
+[docs/TECHNOLOGY_ja.md](docs/TECHNOLOGY_ja.md) を参照してください。
 
 ```bash
 npm run dev -- list            # tsx でソースから実行

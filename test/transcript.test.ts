@@ -28,17 +28,17 @@ describe('transcript rendering', () => {
   it('renders a Claude-Code-like transcript', () => {
     const s = sessionFrom(basicRecords());
     const lines = render(s);
-    expect(lines[0]).toMatch(/^━━━ Remote の進捗確認 · .* · sess-000 · \/work\/proj ━+$/);
-    const user = lines.find((l) => l.startsWith('> remote を確認して'))!;
-    expect(user).toMatch(/^> remote を確認して。どこまで進んだか忘れた\s+\d\d:\d\d$/);
+    expect(lines[0]).toMatch(/^━━━ Check remote progress · .* · sess-000 · \/work\/proj ━+$/);
+    const user = lines.find((l) => l.startsWith('> Check the remote'))!;
+    expect(user).toMatch(/^> Check the remote. I forgot how far we got\s+\d\d:\d\d$/);
     expect(user.length).toBeLessThanOrEqual(80);
     const bash = lines.findIndex((l) => l === '⏺ Bash(git status --short)');
     expect(bash).toBeGreaterThan(0);
     expect(lines[bash + 1]).toBe('  ⎿   M src/a.ts');
     expect(lines[bash + 2]).toBe('     ?? new.txt');
-    expect(lines).toContain('⏺ 確認します。');
-    expect(lines).toContain('⏺ 変更が 2 件あります。');
-    expect(lines).toContain('  - src/a.ts が修正済み');
+    expect(lines).toContain('⏺ Checking.');
+    expect(lines).toContain('⏺ There are 2 changes.');
+    expect(lines).toContain('  - src/a.ts is modified');
     // thinking with empty text is omitted when thinking=off
     expect(lines.some((l) => l.includes('Thinking'))).toBe(false);
     // every line within width
@@ -81,7 +81,7 @@ describe('transcript rendering', () => {
     expect(hidden.some((l) => l.includes('⎿') && !l.includes('no result'))).toBe(false);
     const none = render(s, { hideToolOnly: true });
     expect(none.some((l) => l.startsWith('⏺'))).toBe(false);
-    expect(none.some((l) => l.startsWith('> いろいろ'))).toBe(true);
+    expect(none.some((l) => l.startsWith('> Run a few'))).toBe(true);
   });
 
   it('renders thinking, commands, interrupts, compaction and images', () => {

@@ -5,7 +5,7 @@ This document explains which languages, libraries and terminal techniques
 has just started programming. Technical terms are explained where they first
 appear and again in the glossary at the end.
 
-A Japanese translation is in [TECHNOLOGY.ja.md](TECHNOLOGY.ja.md).
+A Japanese translation is in [TECHNOLOGY_ja.md](TECHNOLOGY_ja.md).
 
 ---
 

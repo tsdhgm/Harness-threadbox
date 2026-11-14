@@ -39,7 +39,7 @@ describe('markdown renderer', () => {
 describe('markdown export', () => {
   it('writes a document with meta, turns and tool details', () => {
     const md = sessionToMarkdown(sessionFrom(basicRecords()));
-    expect(md.startsWith('# Remote の進捗確認\n')).toBe(true);
+    expect(md.startsWith('# Check remote progress\n')).toBe(true);
     expect(md).toContain('- **cwd**: `/work/proj`');
     expect(md).toContain('## User · 2026-10-24T01:00:00.000Z');
     expect(md).toContain('<summary>Bash(git status --short) · ok</summary>');

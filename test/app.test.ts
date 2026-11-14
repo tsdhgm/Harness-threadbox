@@ -44,7 +44,7 @@ describe('App (e2e with FakeTerminal, three panes)', () => {
     // the middle pane lists only projB's sessions
     expect(sessionRows(frame).some((r) => r.includes('title s1'))).toBe(false);
     // right pane shows the end of s3
-    expect(frame.some((r) => panes(r).right.includes('変更が 2 件あります'))).toBe(true);
+    expect(frame.some((r) => panes(r).right.includes('There are 2 changes'))).toBe(true);
     io.feed('q');
     expect(await done).toBe(0);
   });

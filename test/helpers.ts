@@ -120,13 +120,13 @@ export function fixture(name: string): string {
 export function basicRecords(): Record<string, unknown>[] {
   return [
     ...marker(),
-    human(0, 'remote を確認して。どこまで進んだか忘れた'),
-    ...assistant(1, 'msg_001', [thinking(''), text('確認します。'), toolUse('toolu_01', 'Bash', { command: 'git status --short', description: 'Show status' })]),
+    human(0, 'Check the remote. I forgot how far we got'),
+    ...assistant(1, 'msg_001', [thinking(''), text('Checking.'), toolUse('toolu_01', 'Bash', { command: 'git status --short', description: 'Show status' })]),
     toolResult(2, 'toolu_01', ' M src/a.ts\n?? new.txt\n', { structured: { stdout: ' M src/a.ts\n?? new.txt\n', stderr: '', interrupted: false } }),
-    ...assistant(3, 'msg_002', [text('変更が 2 件あります。\n\n- `src/a.ts` が修正済み\n- `new.txt` が未追跡')]),
+    ...assistant(3, 'msg_002', [text('There are 2 changes.\n\n- `src/a.ts` is modified\n- `new.txt` is untracked')]),
     system(4, 'turn_duration', { durationMs: 1234, messageCount: 5 }),
     aiTitle('first title'),
-    aiTitle('Remote の進捗確認'),
+    aiTitle('Check remote progress'),
     { type: 'last-prompt', lastPrompt: 'remote', leafUuid: 'x', sessionId: 'sess-0001' },
     ...marker(),
   ];
