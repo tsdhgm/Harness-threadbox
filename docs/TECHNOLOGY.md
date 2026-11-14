@@ -29,8 +29,8 @@ The source folders map onto those stages.
 | `src/providers/claude/` | find, read and normalize Claude Code logs | ①② |
 | `src/core/` | the data shapes (types) shared by everything, and the registry of sessions | ② |
 | `src/render/` | turn records into strings with colors; Markdown rendering and line wrapping | ③ |
-| `src/tui/` | terminal control, screen drawing, keyboard and mouse handling | ④ |
-| `src/cli/` | command-line argument parsing and the `cat` / `list` / `export` subcommands | ①–③ |
+| `src/tui/` | terminal control, screen drawing, keyboard and mouse handling; `widgets/` holds the project and session lists | ④ |
+| `src/cli/` | command-line argument parsing and the `cat` / `list` / `export` / `id` subcommands | ①–③ |
 
 ---
 
@@ -140,7 +140,7 @@ cut in the middle.
 ### Tests (vitest)
 
 A test is a small program that says "for this input, the output must be
-that", run automatically after every change. `npm test` runs 48 of them, of
+that", run automatically after every change. `npm test` runs 51 of them, of
 three kinds:
 
 1. **Unit tests** exercise one function in isolation. Example: feed the
@@ -153,7 +153,9 @@ three kinds:
 3. **End-to-end (E2E) tests** run the real `App` against a fake terminal
    (`FakeTerminal`) and a fake log source (`FakeProvider`), send keystrokes and
    inspect the screen snapshot, an array of strings (`test/app.test.ts`). The
-   whole TUI can be tested without a terminal.
+   whole TUI can be tested without a terminal. The same fake terminal is
+   behind `node dist/cli.js --frames 3 --keys "G,k"`, which prints screen
+   frames to standard output for debugging.
 
 ### The linter (eslint)
 
@@ -175,8 +177,8 @@ the terminal is restored after quitting.
 ## 5. How the terminal is controlled
 
 This is the lowest-level part of the tool. No general-purpose TUI library
-(Ink, blessed, ...) is used; `src/tui/` implements what is needed in about 700
-lines. The reasons: the viewport is a virtual document of up to hundreds of
+(Ink, blessed, ...) is used; `src/tui/` implements what is needed in about
+2,200 lines, including the three panes and their widgets. The reasons: the viewport is a virtual document of up to hundreds of
 thousands of lines that must be redrawn line by line, and the candidate
 libraries were either unmaintained or required a newer Node.js. The building
 blocks are these.
@@ -196,6 +198,12 @@ written `\x1b` in JavaScript). Examples:
 | `\x1b[?25l` / `h` | hide / show the cursor |
 | `\x1b[?1000;1002;1006h` | report mouse clicks, drags and wheel (SGR mouse mode) |
 | `\x1b[?2026h` / `l` | synchronized output: the terminal applies everything in between at once, avoiding flicker |
+| `\x1b]52;c;<base64>\x07` | OSC 52: ask the terminal to put text on the clipboard (see "Clipboard" below) |
+
+Sequences that start with `ESC [` are called CSI (Control Sequence
+Introducer); the one that starts with `ESC ]` is an OSC (Operating System
+Command), a channel for requests aimed at the terminal program itself rather
+than at the screen.
 
 ### Raw mode
 
@@ -220,6 +228,18 @@ Redrawing the whole screen on every change is slow and flickers. Instead the
 tool remembers each row as it was last drawn and rewrites only the rows that
 changed, moving the cursor to each. Holding two copies of the screen and
 comparing them is called *double buffering*.
+
+### Clipboard (`src/tui/clipboard.ts`)
+
+A terminal program has no direct access to the system clipboard, so pressing
+`y` (copy the session id) tries two routes at once. First, an external
+command-line tool is run with the text on its standard input: `wl-copy` on
+Wayland, `xclip` or `xsel` on X11, `pbcopy` on macOS, `clip.exe` under WSL,
+or `tmux load-buffer` inside tmux. Second, the text is encoded as *Base64*
+(a way of writing arbitrary bytes using only letters, digits, `+` and `/`) and
+sent to the terminal in an OSC 52 sequence. The second route works even over
+SSH, because the terminal emulator on your own machine is the one that
+receives it. The status bar reports which routes succeeded.
 
 ---
 
@@ -296,9 +316,37 @@ second.
 
 ### LRU cache
 
-Loaded sessions are kept in memory up to a limit (6 to 8). Beyond that, the
+Loaded sessions are kept in memory up to a limit (6 in the command-line
+subcommands, 8 in the TUI). Beyond that, the
 one *least recently used* is dropped first, except that sessions currently on
 screen are protected from eviction.
+
+### Three panes, one project at a time (`src/tui/layout.ts`, `src/tui/widgets/`)
+
+The screen is split into projects, sessions and transcript. `layout.ts` turns
+the terminal size and the two divider positions into rectangles, one per pane;
+below 80 columns only the focused pane gets the whole width. Each list pane is
+a *widget*: a small object that knows its rows, its selection and how to draw
+itself into a rectangle. The virtual document on the right is *scoped* to the
+selected project, so scrolling can never cross into another project; choosing
+a different project rebuilds the session list and re-scopes the document.
+
+### Follow mode: behaving like `tail -f`
+
+`tail -f` is the Unix command that prints a file and keeps printing as it
+grows. The transcript pane does the same for a live session when it is
+"pinned" to the end. In **auto** mode the pin is set when you reach the end
+(or press `G`) and cleared when you scroll up, so reading older text is never
+interrupted. **always** re-pins on every update, and **off** never pins. The
+mode is a small *state machine*: a value plus the rules for how each event
+changes it.
+
+### Markdown export (`src/render/markdownExport.ts`)
+
+The same normalized turns that feed the screen can also be written out as a
+Markdown document: one heading per turn, tool calls folded into
+`<details>` blocks, edits as `diff` code fences. Because the data model is
+separate from the drawing code, adding an output format is a single new file.
 
 ### Provider abstraction
 
@@ -328,7 +376,14 @@ fulfils the same contract and registering it.
 | **Byte / offset** | The smallest unit of data (8 bits) / a position counted in bytes from the start |
 | **Grapheme** | What a human sees as one character, even if it is several code units |
 | **Display width** | How many terminal cells a string occupies: Latin 1, CJK 2, combining marks 0 |
-| **ANSI escape sequence** | A terminal command starting with `ESC [`: colors, cursor movement, modes |
+| **ANSI escape sequence** | A terminal command starting with `ESC`: colors, cursor movement, modes |
+| **CSI / OSC** | The two families of escape sequence: `ESC [` for screen control, `ESC ]` for requests to the terminal program (title, clipboard) |
+| **Base64** | Writing arbitrary bytes with only letters, digits, `+` and `/`, so they survive text-only channels |
+| **Pane** | One rectangular region of the screen with its own content and scrolling |
+| **Viewport** | The part of a long document currently visible on screen |
+| **Widget** | A self-contained screen component: it owns its rows and selection and draws itself |
+| **State machine** | A current state plus rules saying how each event moves to the next state |
+| **tail -f** | Unix command that prints a file and keeps printing as it grows; the model for follow mode |
 | **Raw mode** | Terminal mode in which keys are delivered immediately and unprocessed |
 | **Alternate screen** | A separate screen for full-screen programs; the shell screen returns on exit |
 | **Double buffering / differential drawing** | Remembering the last screen and redrawing only what changed |
