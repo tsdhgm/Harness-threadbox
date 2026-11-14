@@ -59,6 +59,24 @@ AI コーディングハーネスのセッションログを Linux コンソー�
 
 Node.js 24 以上が必要です（Linux。macOS も動くはずです。Windows は後述）。
 
+### Debian / Ubuntu: .deb パッケージ
+
+[Releases](https://github.com/tsdhgm/Harness-threadbox/releases) ページから
+`hthreadbox_<version>_all.deb` をダウンロードしてインストールします。
+
+```bash
+sudo apt install ./hthreadbox_0.1.1_all.deb
+hthreadbox --version
+```
+
+パッケージは純粋な JavaScript（`Architecture: all`）です。コンパイル済みの CLI と
+実行時依存を `/usr/lib/hthreadbox` に、起動スクリプトを `/usr/bin/hthreadbox` に
+置きます。起動スクリプトは PATH 上の `node`（24 以上）を使うので、apt、nvm、fnm の
+どれで入れた Node.js でも動きます。自分でビルドする場合は `npm run deb`
+（出力は `build/deb/`）です。
+
+### ソースから
+
 ```bash
 git clone https://github.com/tsdhgm/Harness-threadbox.git
 cd Harness-threadbox

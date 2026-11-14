@@ -9,6 +9,7 @@ Binary: `hthreadbox` (`dist/cli.js`).
 - `npm test` — vitest. Fixtures are generated from `test/helpers.ts` builders (`test/fixtures/*.jsonl` mirror real record shapes).
 - `npm run lint` — eslint 9 flat config.
 - `npm run smoke` — real-data smoke against `~/.claude` (skips when absent). `npm run smoke:tui` — tmux-driven TUI check.
+- `npm run deb` — builds `build/deb/hthreadbox_<version>_all.deb` (`scripts/build-deb.sh`: dist + production node_modules under `/usr/lib/hthreadbox`, `/usr/bin/hthreadbox` wrapper that requires Node ≥ 24 on PATH). Release = bump `package.json` version, tag `v<version>`, attach the .deb.
 - `node dist/cli.js --frames N --size WxH --keys "G,k,Tab,/foo,Enter"` — renders TUI frames to stdout with a fake terminal; the e2e tests (`test/app.test.ts`) use the same `App` + `FakeTerminal` + `FakeProvider`.
 
 ## Architecture (what depends on what)

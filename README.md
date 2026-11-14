@@ -60,6 +60,25 @@ files Claude Code writes locally. It never launches or talks to Claude.
 
 Requires Node.js 24+ (Linux; macOS should work too; Windows see below).
 
+### Debian / Ubuntu: .deb package
+
+Download `hthreadbox_<version>_all.deb` from the
+[Releases](https://github.com/tsdhgm/Harness-threadbox/releases) page and
+install it:
+
+```bash
+sudo apt install ./hthreadbox_0.1.1_all.deb
+hthreadbox --version
+```
+
+The package is pure JavaScript (`Architecture: all`). It installs the compiled
+CLI and its runtime dependencies under `/usr/lib/hthreadbox` and a launcher at
+`/usr/bin/hthreadbox` that runs whichever `node` (24 or newer) is on your PATH,
+so Node.js installed through apt, nvm or fnm all work. To build the package
+yourself: `npm run deb` (output in `build/deb/`).
+
+### From source
+
 ```bash
 git clone https://github.com/tsdhgm/Harness-threadbox.git
 cd Harness-threadbox
