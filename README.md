@@ -10,9 +10,6 @@ The first supported harness is **Claude Code** (it reads the JSONL transcripts
 under `~/.claude/projects/`). Codex / Gemini / Grok are planned as additional
 providers behind the same interface.
 
-It is the console counterpart of the VS Code extension
-[vsc-claude-threadbox](https://github.com/tosihide/vsc-claude-threadbox).
-
 **Not affiliated with Anthropic.** This is an unofficial, read-only viewer for
 files Claude Code writes locally. It never launches or talks to Claude.
 

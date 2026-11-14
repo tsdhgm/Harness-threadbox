@@ -12,9 +12,6 @@ AI コーディングハーネスのセッションログを Linux コンソー�
 トランスクリプトを読みます）。Codex / Gemini / Grok は同じインターフェースの
 プロバイダとして追加する予定です。
 
-VS Code 拡張 [vsc-claude-threadbox](https://github.com/tosihide/vsc-claude-threadbox)
-のコンソール版にあたります。
-
 **Anthropic とは無関係です。** Claude Code がローカルに書き出すファイルを読むだけの
 非公式ビューアで、Claude を起動したり通信したりすることはありません。
 

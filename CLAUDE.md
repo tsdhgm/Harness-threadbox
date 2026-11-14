@@ -1,7 +1,7 @@
 # harness-threadbox — notes for Claude Code
 
 Console (TUI) viewer for AI coding-harness session logs. TypeScript, Node 24, ESM, no bundler.
-Binary: `hthreadbox` (`dist/cli.js`). Console counterpart of `vsc-claude-threadbox`.
+Binary: `hthreadbox` (`dist/cli.js`).
 
 ## Commands
 
@@ -47,10 +47,10 @@ Record types and what `providers/claude/normalizer.ts` does with them:
 - `ai-title` `{aiTitle}` — appears many times; **last wins** → session title. Indexer reads the file tail (256 KB, then 1 MB) to find it without parsing the whole file.
 - `system` with `subtype`: `turn_duration` (attached to the previous assistant turn), `compact_boundary` / `informational` / `away_summary` (visible notices), others hidden.
 - Dropped (counted in `parse.skippedTypes`): `attachment` (envelope for harness-injected context — the same text that appears as `<system-reminder>`; NOT user attachments), `mode`, `permission-mode`, `atis-latch`, `last-prompt`, `file-history-snapshot|delta`, `cost-state`, `api-request*`, `queue-operation`, anything unknown, `isSidechain: true`.
-- Files end with state markers (`mode`/`permission-mode`/`atis-latch`) between turns; writes are bursty. `jsonlTailer.ts` keeps its offset at the last consumed `\n` (byte-level split before UTF-8 decode) — this fixes the duplicate/partial-line race that `vsc-claude-threadbox`'s `parseJsonlFromOffset` had. Duplicate `uuid`s are ignored as a second line of defense.
+- Files end with state markers (`mode`/`permission-mode`/`atis-latch`) between turns; writes are bursty. `jsonlTailer.ts` keeps its offset at the last consumed `\n` (byte-level split before UTF-8 decode) — this avoids the duplicate/partial-line race of a naive parse-from-byte-offset approach. Duplicate `uuid`s are ignored as a second line of defense.
 - Largest file seen: 14.4 MB / 5,894 lines / 140 KB max line; `cat` renders it in ~0.5 s.
 
-Verify against real data before "fixing" a gap: `python3 -I` over a `.jsonl` beats guessing (see the threadbox docs: the `attachment` type was once mistaken for user attachments).
+Verify against real data before "fixing" a gap: `python3 -I` over a `.jsonl` beats guessing (the `attachment` type was once mistaken for user attachments).
 
 ## Adding a provider (Codex / Gemini / Grok)
 
